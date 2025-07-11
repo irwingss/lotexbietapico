@@ -1,4 +1,4 @@
-FROM rocker/shiny:latest
+FROM rocker/shiny:4.2.2
 
 # Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
@@ -12,14 +12,11 @@ RUN apt-get update && apt-get install -y \
     libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalar pak para gestión de paquetes
-RUN R -e "install.packages('pak', repos = sprintf('https://r-lib.github.io/p/pak/stable/os=%s/R=%s', .Platform\$OS.type, getRversion()))"
-
-# Instalar paquetes R necesarios
-RUN R -e "pak::pkg_install(c(\
+# Instalar paquetes R necesarios directamente
+RUN R -e "install.packages(c(\
     'shiny', 'shinydashboard', 'readxl', 'DT', 'dplyr', 'lme4', \
     'performance', 'TeachingSampling', 'dbscan', 'purrr', 'openxlsx', 'sf', \
-    'colourpicker', 'uuid'))"
+    'colourpicker', 'uuid'), repos='https://cran.rstudio.com/')"
 
 # Copiar la aplicación
 COPY . /srv/shiny-server/app/

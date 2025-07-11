@@ -1,26 +1,11 @@
-# --- Gestión de Paquetes --- #
-# Este bloque verifica si los paquetes necesarios están instalados.
-# Si no, los instala usando 'pak' para una gestión de paquetes moderna y eficiente.
+# --- Cargar Paquetes --- #
+# Cargar todos los paquetes requeridos para la aplicación
 # ---------------------------------------------------------------------------- #
-# Lista de paquetes requeridos
 packages <- c(
   "shiny", "shinydashboard", "readxl", "DT", "dplyr", "lme4", 
   "performance", "TeachingSampling", "dbscan", "purrr", "openxlsx", "sf",
   "colourpicker", "uuid"
 )
-
-# Identificar paquetes no instalados
-paquetes_a_instalar <- packages[!sapply(packages, requireNamespace, quietly = TRUE)]
-
-# Instalar paquetes solo si hay alguno faltante
-if (length(paquetes_a_instalar) > 0) {
-  # Instalar 'pak' si no está presente
-  if (!requireNamespace("pak", quietly = TRUE)) {
-    install.packages("pak", repos = sprintf("https://r-lib.github.io/p/pak/stable/os=%s/R=%s", .Platform$OS.type, getRversion()))
-  }
-  # Instalar solo los paquetes faltantes
-  pak::pkg_install(paquetes_a_instalar)
-}
 
 # Cargar todos los paquetes requeridos
 lapply(packages, library, character.only = TRUE)
