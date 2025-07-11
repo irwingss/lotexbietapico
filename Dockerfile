@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar pak para gestión de paquetes
-RUN R -e "install.packages('pak', repos = sprintf('https://r-lib.github.io/p/pak/stable/os=%s/R=%s', .Platform$OS.type, getRversion()))"
+RUN R -e "install.packages('pak', repos = sprintf('https://r-lib.github.io/p/pak/stable/os=%s/R=%s', .Platform\$OS.type, getRversion()))"
 
 # Instalar paquetes R necesarios
 RUN R -e "pak::pkg_install(c(\
