@@ -1,4 +1,5 @@
-FROM rocker/shiny:4.2.2
+# Usar una imagen base geoespacial que incluye dependencias para 'sf'
+FROM rocker/geospatial:4.2.2
 
 # Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
