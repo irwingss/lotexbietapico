@@ -20,7 +20,7 @@ tryCatch({
   scripts_path <- "scripts"
   params_path <- "Parámetros generales"
   
-  # Cargar scripts de funciones
+  # Cargar scripts de funciones (estos no requieren lme4)
   r_scripts <- list.files(path = scripts_path, pattern = "\\.R$", full.names = TRUE, ignore.case = TRUE)
   # Excluir scripts que son para análisis interactivo y no para la app
   scripts_a_excluir <- c("Revisión de listado de locaciones.R")
@@ -30,12 +30,10 @@ tryCatch({
     source(script, local = TRUE, encoding = "UTF-8")
   }
   
-  # Cargar scripts de parámetros
-  r_params <- list.files(path = params_path, pattern = "\\.R$", full.names = TRUE, ignore.case = TRUE)
-  for (param in r_params) {
-    print(paste("Cargando parámetro:", param))
-    source(param, local = TRUE, encoding = "UTF-8")
-  }
+  # Cargar directamente el archivo RData con los parámetros precalculados
+  rdata_path <- file.path(params_path, "parametros.RData")
+  print(paste("Cargando parámetros desde:", rdata_path))
+  load(rdata_path, envir = environment())
   
   print("Todos los scripts y parámetros han sido cargados exitosamente.")
   

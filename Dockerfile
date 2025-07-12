@@ -14,8 +14,8 @@ RUN apt-get update && apt-get install -y \
 
 # Instalar paquetes R necesarios directamente
 RUN R -e "install.packages(c(\
-    'shiny', 'shinydashboard', 'readxl', 'DT', 'dplyr', 'lme4', \
-    'performance', 'TeachingSampling', 'dbscan', 'purrr', 'openxlsx', 'sf', \
+    'shiny', 'shinydashboard', 'readxl', 'DT', 'dplyr', \
+    'TeachingSampling', 'dbscan', 'purrr', 'openxlsx', 'sf', \
     'colourpicker', 'uuid'), repos='https://cran.rstudio.com/')"
 
 # Copiar la aplicación

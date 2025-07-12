@@ -1,7 +1,0 @@
-𝒏 = número de muestras de una supervisión
-𝑵 =  en función de las locaciones y celdas por expediente
-𝒁 = 1.96
-𝛔 = 4697.893
-𝐞 = 444.3033
-𝐓𝐍𝐑 = 0.0575
-𝐃𝐄𝐅𝐅 = 1.267366
