@@ -2,8 +2,8 @@
 # Cargar todos los paquetes requeridos para la aplicación
 # ---------------------------------------------------------------------------- #
 packages <- c(
-  "shiny", "shinydashboard", "readxl", "DT", "dplyr", "lme4", 
-  "performance", "TeachingSampling", "dbscan", "purrr", "openxlsx", "sf",
+  "shiny", "shinydashboard", "readxl", "DT", "dplyr", 
+  "TeachingSampling", "dbscan", "purrr", "openxlsx", "sf",
   "colourpicker", "uuid"
 )
 
