@@ -320,8 +320,22 @@ ui <- navbarPage(
                     tabsetPanel(id = "tabset_fase4",
                                 tabPanel("Resumen del Muestreo", 
                                          h3("Verificación de la Muestra Final", class = "fade-in"),
-                                         div(class = "card fade-in",
-                                           verbatimTextOutput("resumen_muestreo_texto")
+                                         fluidRow(
+                                           column(width = 6,
+                                                  div(class = "card fade-in",
+                                                      h4("Estadísticas Generales"),
+                                                      DTOutput("tabla_estadisticas_generales")
+                                                  )
+                                           ),
+                                           column(width = 6,
+                                                  div(class = "card fade-in",
+                                                      h4("Conteo de Rejillas por Locación"),
+                                                      DTOutput("tabla_conteo_rejillas_locacion"),
+                                                      tags$br(),
+                                                      downloadButton("descargar_conteo_rejillas_btn", "Descargar Tabla (.xlsx)", 
+                                                                    class = "btn-success btn-sm")
+                                                  )
+                                           )
                                          )
                                 ),
                                 tabPanel("Muestra Final", 
@@ -1500,11 +1514,81 @@ server <- function(input, output, session) {
     })
   })
   
-  # Mostrar resumen del muestreo
-  output$resumen_muestreo_texto <- renderPrint({
-    req(resumen_muestreo())
-    cat(resumen_muestreo())
+  # Variables reactivas para las nuevas tablas
+  estadisticas_generales <- reactive({
+    req(datos_finales_df())
+    datos_final <- datos_finales_df()
+    
+    data.frame(
+      Estadística = c("Nº de locaciones únicas", "Nº de celdas únicas", "Nº de rejillas únicas (n final)"),
+      Valor = c(
+        length(unique(datos_final$LOCACION)),
+        length(unique(datos_final$COD_CELDA)),
+        length(unique(datos_final$COD_GRILLA))
+      ),
+      stringsAsFactors = FALSE
+    )
   })
+  
+  conteo_rejillas_por_locacion <- reactive({
+    req(datos_finales_df())
+    datos_final <- datos_finales_df()
+    
+    datos_final %>% 
+      count(LOCACION, name = "Número_de_Rejillas") %>% 
+      arrange(Número_de_Rejillas)
+  })
+  
+  # Mostrar tabla de estadísticas generales
+  output$tabla_estadisticas_generales <- renderDT({
+    req(estadisticas_generales())
+    
+    datatable(
+      estadisticas_generales(),
+      options = list(
+        pageLength = 10,
+        scrollX = TRUE,
+        dom = 't',  # Solo mostrar la tabla, sin controles
+        ordering = FALSE
+      ),
+      rownames = FALSE
+    ) %>%
+    formatStyle(
+      "Valor",
+      fontWeight = "bold",
+      color = "#007bff"
+    )
+  })
+  
+  # Mostrar tabla de conteo de rejillas por locación
+  output$tabla_conteo_rejillas_locacion <- renderDT({
+    req(conteo_rejillas_por_locacion())
+    
+    datatable(
+      conteo_rejillas_por_locacion(),
+      options = list(
+        pageLength = 10,
+        scrollX = TRUE,
+        autoWidth = TRUE
+      ),
+      rownames = FALSE
+    ) %>%
+    formatStyle(
+      "Número_de_Rejillas",
+      fontWeight = "bold"
+    )
+  })
+  
+  # Descargar tabla de conteo de rejillas por locación
+  output$descargar_conteo_rejillas_btn <- downloadHandler(
+    filename = function() {
+      paste("Conteo_Rejillas_por_Locacion-", Sys.Date(), ".xlsx", sep = "")
+    },
+    content = function(file) {
+      req(conteo_rejillas_por_locacion())
+      openxlsx::write.xlsx(conteo_rejillas_por_locacion(), file)
+    }
+  )
   
   # Mostrar tabla de muestra final
   output$tabla_muestra_final <- renderDT({
