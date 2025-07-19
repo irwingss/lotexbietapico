@@ -151,8 +151,9 @@ ui <- navbarPage(
                       h3("2A. Cargar Archivos", class = "fade-in"),
                       div(class = "card",
                         p(strong("Columnas requeridas:")),
-                        p(em("Marco de Celdas:"), " LOCACION, COD_CELDA, Prof"),
-                        p(em("Marco de Grillas:"), " LOCACION, COD_CELDA, COD_GRILLA, P_SUPERPOS, Este, Norte, Prof")
+                        p(em("Marco de Celdas:"), " LOCACION, COD_CELDA, PROF"),
+                        p(em("Marco de Grillas:"), " LOCACION, COD_CELDA, COD_GRILLA, P_SUPERPOS, ESTE, NORTE, PROF"),
+                        p(strong("Nota:"), " Los nombres de columnas se estandarizan automáticamente a mayúsculas al cargar los archivos.")
                       ),
                       tags$hr(),
                       div(class = "card",
@@ -365,8 +366,15 @@ server <- function(input, output, session) {
     # Leer el archivo Excel
     tryCatch({
       datos <- read_excel(input$archivo_excel$datapath)
+      
+      # Estandarizar nombres de columnas (convertir a mayúsculas y mapear variaciones)
+      datos <- estandarizar_columnas(datos)
+      
+      # Verificar que existan las columnas requeridas para celdas preliminares
+      verificar_columnas_requeridas(datos, c("LOCACION", "AREA", "COD_CELDA"), "archivo de celdas preliminares")
+      
       marco_celdas_original(datos) # Guardar en la variable reactiva
-      showNotification("Archivo cargado exitosamente como 'marco_celdas_original'", type = "message")
+      showNotification("Archivo cargado exitosamente con columnas estandarizadas", type = "message")
     }, error = function(e) {
       showNotification(paste("Error al cargar el archivo:", e$message), type = "error")
     })
@@ -843,14 +851,22 @@ server <- function(input, output, session) {
     tryCatch({
       # Cargar marco de celdas
       datos_celdas <- read_excel(input$archivo_marco_celdas$datapath)
+      # Estandarizar nombres de columnas
+      datos_celdas <- estandarizar_columnas(datos_celdas)
+      # Verificar columnas requeridas para marco de celdas
+      verificar_columnas_requeridas(datos_celdas, c("COD_CELDA", "LOCACION"), "marco de celdas")
       marco_celdas(datos_celdas)
       
       # Cargar marco de grillas
       datos_grillas <- read_excel(input$archivo_marco_grillas$datapath)
+      # Estandarizar nombres de columnas
+      datos_grillas <- estandarizar_columnas(datos_grillas)
+      # Verificar columnas requeridas para marco de grillas (Este, Norte, Prof son clave)
+      verificar_columnas_requeridas(datos_grillas, c("COD_CELDA", "ESTE", "NORTE", "PROF"), "marco de grillas")
       marco_grillas(datos_grillas)
       
       # Mostrar notificación de éxito
-      showNotification("Marcos cargados exitosamente", type = "message")
+      showNotification("Marcos cargados exitosamente con columnas estandarizadas", type = "message")
       
       # Cambiar a la pestaña de Vista Previa
       updateTabsetPanel(session, "tabset_fase2", selected = "Vista Previa")
@@ -1628,15 +1644,15 @@ server <- function(input, output, session) {
       
       tryCatch({
         # Asegurarse de que las columnas de coordenadas existan
-        if (!all(c("Este", "Norte") %in% names(datos_finales_df()))) {
-          showNotification("Las columnas 'Este' y 'Norte' son necesarias para el Shapefile.", type = "error")
+        if (!all(c("ESTE", "NORTE") %in% names(datos_finales_df()))) {
+          showNotification("Las columnas 'ESTE' y 'NORTE' son necesarias para el Shapefile.", type = "error")
           return(NULL)
         }
 
         # Convertir a objeto sf
         pts_sf <- st_as_sf(
           datos_finales_df(),
-          coords = c("Este", "Norte"),
+          coords = c("ESTE", "NORTE"),
           crs = 32717    # EPSG para WGS84 / UTM zona 17S
         )
         
