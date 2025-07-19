@@ -13,7 +13,7 @@ lapply(packages, library, character.only = TRUE)
 
 # Cargar funciones y scripts
 # ---------------------------------------------------------------------------- #
-# NOTA: Este bloque carga todas las funciones y parámetros necesarios
+# NOTA: ESTE bloque carga todas las funciones y parámetros necesarios
 # para la ejecución de la app. Se ejecuta una sola vez al inicio.
 # ---------------------------------------------------------------------------- #
 tryCatch({
@@ -333,6 +333,34 @@ ui <- navbarPage(
                     )
              )
            )
+  ),
+  
+  # Pestaña de Errores - Para mostrar errores de la aplicación
+  tabPanel("⚠️ Errores",
+           fluidRow(
+             column(width = 12,
+                    div(class = "card fade-in",
+                        h3("Registro de Errores de la Aplicación", class = "fade-in"),
+                        p("Esta pestaña muestra todos los errores que han ocurrido durante la ejecución de la aplicación."),
+                        tags$hr(),
+                        h4("Errores Recientes:"),
+                        div(id = "error-container", style = "max-height: 600px; overflow-y: auto;",
+                            verbatimTextOutput("registro_errores")
+                        ),
+                        tags$hr(),
+                        fluidRow(
+                          column(width = 6,
+                                 actionButton("limpiar_errores_btn", "Limpiar Registro", 
+                                             class = "btn-warning", icon = icon("trash"))
+                          ),
+                          column(width = 6,
+                                 downloadButton("descargar_errores_btn", "Descargar Log de Errores", 
+                                               class = "btn-info")
+                          )
+                        )
+                    )
+             )
+           )
   )
 )
 
@@ -359,6 +387,56 @@ server <- function(input, output, session) {
   celdas_solo_en_marco_celdas <- reactiveVal(NULL)
   celdas_solo_en_marco_grillas <- reactiveVal(NULL)
   
+  # Sistema de manejo de errores
+  registro_errores_lista <- reactiveVal(list())
+  
+  # Función para registrar errores
+  registrar_error <- function(error_obj, contexto = "") {
+    timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+    
+    # Extraer información detallada del error
+    mensaje_error <- ""
+    if (is.character(error_obj)) {
+      mensaje_error <- error_obj
+    } else if (inherits(error_obj, "error")) {
+      mensaje_error <- conditionMessage(error_obj)
+      if (nchar(mensaje_error) == 0) {
+        mensaje_error <- paste("Error de tipo:", class(error_obj)[1])
+      }
+    } else {
+      mensaje_error <- as.character(error_obj)
+    }
+    
+    # Si el mensaje sigue vacío, proporcionar información básica
+    if (nchar(mensaje_error) == 0 || mensaje_error == "") {
+      mensaje_error <- "Error desconocido - sin mensaje específico"
+    }
+    
+    # Añadir información adicional si está disponible
+    if (inherits(error_obj, "error") && !is.null(error_obj$call)) {
+      call_info <- deparse(error_obj$call)[1]
+      if (nchar(call_info) > 0) {
+        mensaje_error <- paste(mensaje_error, "\nLlamada:", call_info)
+      }
+    }
+    
+    nuevo_error <- list(
+      timestamp = timestamp,
+      contexto = contexto,
+      mensaje = mensaje_error
+    )
+    
+    errores_actuales <- registro_errores_lista()
+    errores_actuales <- append(errores_actuales, list(nuevo_error))
+    
+    # Mantener solo los últimos 50 errores para evitar problemas de memoria
+    if (length(errores_actuales) > 50) {
+      errores_actuales <- errores_actuales[(length(errores_actuales) - 49):length(errores_actuales)]
+    }
+    
+    registro_errores_lista(errores_actuales)
+  }
+  
   # Función para cargar los datos cuando se presione el botón
   observeEvent(input$cargar_btn, {
     req(input$archivo_excel)
@@ -375,14 +453,16 @@ server <- function(input, output, session) {
       
       marco_celdas_original(datos) # Guardar en la variable reactiva
       showNotification("Archivo cargado exitosamente con columnas estandarizadas", type = "message")
-    }, error = function(e) {
-      showNotification(paste("Error al cargar el archivo:", e$message), type = "error")
-    })
+      }, error = function(e) {
+        registrar_error(e, "Carga de Archivo Excel")
+        showNotification(paste("Error al cargar el archivo:", conditionMessage(e)), type = "error")
+      })
   })
   
   # Función para simular la eliminación de una locación
   observeEvent(input$simular_btn, {
     req(marco_celdas_original(), input$locacion_simular)
+{{ ... }}
     
     # Verificar que la locación exista
     locacion_a_eliminar <- input$locacion_simular
@@ -749,7 +829,7 @@ server <- function(input, output, session) {
     cat("Lado de la rejilla:", format(lado, digits = 6), "\n")
   })
   
-  # Mantener este bloque vacío para referencia futura
+  # Mantener ESTE bloque vacío para referencia futura
   # La funcionalidad de revisión de celdas ahora está integrada en el evento confirmar_seleccion
   # observeEvent(input$revisar_celdas_btn, { ... })
   
@@ -861,7 +941,7 @@ server <- function(input, output, session) {
       datos_grillas <- read_excel(input$archivo_marco_grillas$datapath)
       # Estandarizar nombres de columnas
       datos_grillas <- estandarizar_columnas(datos_grillas)
-      # Verificar columnas requeridas para marco de grillas (Este, Norte, Prof son clave)
+      # Verificar columnas requeridas para marco de grillas (ESTE, NORTE, PROF son clave)
       verificar_columnas_requeridas(datos_grillas, c("COD_CELDA", "ESTE", "NORTE", "PROF"), "marco de grillas")
       marco_grillas(datos_grillas)
       
@@ -872,7 +952,8 @@ server <- function(input, output, session) {
       updateTabsetPanel(session, "tabset_fase2", selected = "Vista Previa")
       
     }, error = function(e) {
-      showNotification(paste("Error al cargar los archivos:", e$message), type = "error")
+      registrar_error(e, "Carga de Marcos")
+      showNotification(paste("Error al cargar los archivos:", conditionMessage(e)), type = "error")
     })
   })
   
@@ -1393,7 +1474,7 @@ server <- function(input, output, session) {
       # 5. VERIFICACIÓN DE MUESTRA
       datos_final <- mg %>% 
         filter(COD_GRILLA %in% nombres_rejillas_seleccionadas) %>%
-        dplyr::select(LOCACION, COD_CELDA, COD_GRILLA, Este, Norte, Prof, P_SUPERPOS)
+        dplyr::select(LOCACION, COD_CELDA, COD_GRILLA, ESTE, NORTE, PROF, P_SUPERPOS)
       
       datos_finales_df(datos_final)
       
@@ -1413,8 +1494,9 @@ server <- function(input, output, session) {
       showNotification("Muestreo Bietápico completado exitosamente.", type = "message")
       
     }, error = function(e) {
-      showNotification(paste("Error en el muestreo bietápico:", e$message), type = "error")
-      resumen_muestreo(paste("Error:", e$message))
+      registrar_error(e, "Muestreo Bietápico")
+      showNotification(paste("Error en el muestreo bietápico:", conditionMessage(e)), type = "error")
+      resumen_muestreo(paste("Error:", conditionMessage(e)))
     })
   })
   
@@ -1477,13 +1559,13 @@ server <- function(input, output, session) {
         group_by(LOCACION) %>%
         group_map(.f = function(df_loc, key_loc) {
           # A) dbscan para agrupar puntos
-          clustering <- dbscan(as.matrix(df_loc[, c("Este", "Norte")]), eps = 10, minPts = 1)
+          clustering <- dbscan(as.matrix(df_loc[, c("ESTE", "NORTE")]), eps = 10, minPts = 1)
           df_loc$cluster_id <- clustering$cluster
 
           # B) Calcular centroides y su orden
           centroides <- df_loc %>%
             group_by(cluster_id) %>%
-            summarize(cE = mean(Este), cN = mean(Norte), .groups = "drop") %>%
+            summarize(cE = mean(ESTE), cN = mean(NORTE), .groups = "drop") %>%
             arrange(cE, cN) %>%
             mutate(cluster_orden = row_number())
 
@@ -1494,7 +1576,7 @@ server <- function(input, output, session) {
           df_loc_ordenado <- df_loc %>%
             group_by(cluster_orden) %>%
             group_modify(.f = function(dcluster, key_cl) {
-              idx_orden_local <- nearest_neighbor_order(dcluster$Este, dcluster$Norte)
+              idx_orden_local <- nearest_neighbor_order(dcluster$ESTE, dcluster$NORTE)
               dcluster$orden_en_cluster <- seq_len(nrow(dcluster))[order(idx_orden_local)]
               return(dcluster)
             }) %>%
@@ -1515,13 +1597,14 @@ server <- function(input, output, session) {
       datosFINAL_result <- datosFINAL_result %>%
         mutate(COD_PUNTO_CAMPO = paste0("L-X,6,PZ", COD_GRILLA_NUMERADA_ESPACIALMENTE),
                COD_COLECTORA = sub(".*PZ", "", COD_PUNTO_CAMPO)) %>%
-        dplyr::select(LOCACION, COD_CELDA, COD_GRILLA, Este, Norte, Prof, P_SUPERPOS, COD_PUNTO_CAMPO, COD_COLECTORA)
+        dplyr::select(LOCACION, COD_CELDA, COD_GRILLA, ESTE, NORTE, PROF, P_SUPERPOS, COD_PUNTO_CAMPO, COD_COLECTORA)
 
       datos_finales_df(datosFINAL_result)
 
       showNotification("Códigos generados y añadidos a la tabla.", type = "message")
     }, error = function(e) {
-      showNotification(paste("Error al generar códigos:", e$message), type = "error")
+      registrar_error(e, "Generación de Códigos")
+      showNotification(paste("Error al generar códigos:", conditionMessage(e)), type = "error")
     })
   })
 
@@ -1673,6 +1756,7 @@ server <- function(input, output, session) {
         # Comprimir los archivos en un .zip
         zip(zipfile = file, files = files_to_zip, flags = "-j") # -j para no guardar rutas
       }, error = function(e) {
+        registrar_error(e$message, "Generación de Shapefile")
         showNotification(paste("Error al generar el Shapefile:", e$message), type = "error")
       })
     }
@@ -1709,6 +1793,77 @@ server <- function(input, output, session) {
     cat("RESULTADO:\n")
     cat("Tamaño muestral (n): ", params$n, " rejillas\n")
   })
+  
+  # ============================================================================ #
+  # SISTEMA DE ERRORES                                                          #
+  # ============================================================================ #
+  
+  # Mostrar el registro de errores
+  output$registro_errores <- renderPrint({
+    errores <- registro_errores_lista()
+    
+    if (length(errores) == 0) {
+      cat("No se han registrado errores.\n")
+      cat("\n")
+      cat("✅ La aplicación está funcionando correctamente.")
+    } else {
+      cat("REGISTRO DE ERRORES DE LA APLICACIÓN\n")
+      cat("=====================================\n\n")
+      
+      # Mostrar errores en orden cronológico inverso (más recientes primero)
+      for (i in length(errores):1) {
+        error <- errores[[i]]
+        cat(sprintf("[%s] %s\n", error$timestamp, 
+                   if(error$contexto != "") paste0("(", error$contexto, ") ") else ""))
+        cat(sprintf("Error: %s\n", error$mensaje))
+        cat("---\n")
+      }
+      
+      cat(sprintf("\nTotal de errores registrados: %d\n", length(errores)))
+    }
+  })
+  
+  # Limpiar el registro de errores
+  observeEvent(input$limpiar_errores_btn, {
+    registro_errores_lista(list())
+    showNotification("Registro de errores limpiado.", type = "message")
+  })
+  
+  # Descargar log de errores
+  output$descargar_errores_btn <- downloadHandler(
+    filename = function() {
+      paste("log_errores_bietapico-", Sys.Date(), ".txt", sep = "")
+    },
+    content = function(file) {
+      errores <- registro_errores_lista()
+      
+      if (length(errores) == 0) {
+        writeLines("No se han registrado errores.", file)
+      } else {
+        lineas <- c(
+          "REGISTRO DE ERRORES - APLICACIÓN MUESTREO BIETÁPICO",
+          paste("Generado el:", Sys.time()),
+          paste(rep("=", 60), collapse = ""),
+          ""
+        )
+        
+        for (i in 1:length(errores)) {
+          error <- errores[[i]]
+          lineas <- c(lineas,
+                     sprintf("ERROR #%d", i),
+                     sprintf("Fecha/Hora: %s", error$timestamp),
+                     sprintf("Contexto: %s", if(error$contexto != "") error$contexto else "General"),
+                     sprintf("Mensaje: %s", error$mensaje),
+                     "",
+                     paste(rep("-", 40), collapse = ""),
+                     "")
+        }
+        
+        lineas <- c(lineas, sprintf("Total de errores: %d", length(errores)))
+        writeLines(lineas, file)
+      }
+    }
+  )
 }
 
 # Correr la aplicación
