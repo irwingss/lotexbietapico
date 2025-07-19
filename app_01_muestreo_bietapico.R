@@ -306,7 +306,18 @@ ui <- navbarPage(
                                      class = "btn-primary btn-block")
                       ),
                       tags$hr(),
-                      h3("4C. Exportar Resultados", class = "fade-in"),
+                      h3("4C. Generar distancias a Pozos", class = "fade-in"),
+                      div(class = "card",
+                        p("Carga un archivo Excel con pozos de referencia para calcular distancias y añadir altitudes."),
+                        p(strong("Columnas requeridas:")),
+                        p(em("LOCACION, ESTE, NORTE, ALTITUD")),
+                        fileInput("archivo_pozos_referencia", "Seleccionar archivo Excel de pozos",
+                                  accept = c(".xlsx", ".xls")),
+                        actionButton("generar_distancias_btn", "3. Generar Distancias y Altitudes", 
+                                     class = "btn-warning btn-block")
+                      ),
+                      tags$hr(),
+                      h3("4D. Exportar Resultados", class = "fade-in"),
                       div(class = "card",
                         p("Descarga la muestra final con códigos en el formato que prefieras."),
                         downloadButton("descargar_shp_btn", "Descargar Shapefile (.zip)", class = "btn-success btn-block"),
@@ -400,6 +411,10 @@ server <- function(input, output, session) {
   celdas_con_pocas_grillas <- reactiveVal(NULL)
   celdas_solo_en_marco_celdas <- reactiveVal(NULL)
   celdas_solo_en_marco_grillas <- reactiveVal(NULL)
+  
+  # Variables reactivas - Fase 4 (Pozos de referencia)
+  pozos_referencia <- reactiveVal(NULL)
+  datos_finales_con_distancias <- reactiveVal(NULL)
   
   # Sistema de manejo de errores
   registro_errores_lista <- reactiveVal(list())
@@ -1514,6 +1529,43 @@ server <- function(input, output, session) {
     })
   })
   
+  # Lógica para generar distancias a pozos
+  observeEvent(input$generar_distancias_btn, {
+    req(input$archivo_pozos_referencia, datos_finales_df())
+    
+    showNotification("Cargando pozos de referencia y calculando distancias...", type = "message")
+    
+    tryCatch({
+      # Leer el archivo Excel de pozos de referencia
+      pozos_data <- read_excel(input$archivo_pozos_referencia$datapath)
+      
+      # Estandarizar nombres de columnas
+      pozos_data <- estandarizar_columnas(pozos_data)
+      
+      # Verificar que existan las columnas requeridas
+      verificar_columnas_requeridas(pozos_data, c("LOCACION", "ESTE", "NORTE", "ALTITUD"), "archivo de pozos de referencia")
+      
+      # Almacenar pozos de referencia
+      pozos_referencia(pozos_data)
+      
+      # Obtener datos finales actuales
+      datos_actuales <- datos_finales_df()
+      
+      # Calcular distancias y añadir altitudes
+      datos_con_distancias <- añadir_distancias_pozos(datos_actuales, pozos_data)
+      
+      # Actualizar los datos finales con las nuevas columnas
+      datos_finales_df(datos_con_distancias)
+      datos_finales_con_distancias(datos_con_distancias)
+      
+      showNotification("Distancias y altitudes añadidas exitosamente a la muestra final.", type = "message")
+      
+    }, error = function(e) {
+      registrar_error(e, "Generar distancias a pozos")
+      showNotification(paste("Error al generar distancias:", conditionMessage(e)), type = "error")
+    })
+  })
+  
   # Variables reactivas para las nuevas tablas
   estadisticas_generales <- reactive({
     req(datos_finales_df())
@@ -1593,7 +1645,41 @@ server <- function(input, output, session) {
   # Mostrar tabla de muestra final
   output$tabla_muestra_final <- renderDT({
     req(datos_finales_df())
-    datatable(datos_finales_df(), options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE)
+    
+    datos <- datos_finales_df()
+    
+    dt <- datatable(
+      datos,
+      options = list(
+        pageLength = 10,
+        scrollX = TRUE,
+        autoWidth = TRUE,
+        columnDefs = list(
+          list(width = "300px", targets = which(names(datos) == "DISTANCIA") - 1)  # Hacer columna DISTANCIA más ancha
+        )
+      ),
+      rownames = FALSE
+    )
+    
+    # Aplicar formato especial si existen las columnas DISTANCIA y ALTITUD
+    if ("DISTANCIA" %in% names(datos)) {
+      dt <- dt %>% formatStyle(
+        "DISTANCIA",
+        fontSize = "12px",
+        whiteSpace = "normal",
+        wordWrap = "break-word"
+      )
+    }
+    
+    if ("ALTITUD" %in% names(datos)) {
+      dt <- dt %>% formatStyle(
+        "ALTITUD",
+        fontWeight = "bold",
+        color = "#28a745"
+      )
+    }
+    
+    return(dt)
   })
   
   # Función auxiliar para encontrar un "orden de visita" por vecino más cercano
@@ -1680,8 +1766,16 @@ server <- function(input, output, session) {
       # F) Crear códigos finales y seleccionar columnas
       datosFINAL_result <- datosFINAL_result %>%
         mutate(COD_PUNTO_CAMPO = paste0("L-X,6,PZ", COD_GRILLA_NUMERADA_ESPACIALMENTE),
-               COD_COLECTORA = sub(".*PZ", "", COD_PUNTO_CAMPO)) %>%
-        dplyr::select(LOCACION, COD_CELDA, COD_GRILLA, ESTE, NORTE, PROF, P_SUPERPOS, COD_PUNTO_CAMPO, COD_COLECTORA)
+               COD_COLECTORA = sub(".*PZ", "", COD_PUNTO_CAMPO))
+      
+      # Seleccionar columnas base y añadir DISTANCIA y ALTITUD si existen
+      columnas_base <- c("LOCACION", "COD_CELDA", "COD_GRILLA", "ESTE", "NORTE", "PROF", "P_SUPERPOS", "COD_PUNTO_CAMPO", "COD_COLECTORA")
+      columnas_adicionales <- c("DISTANCIA", "ALTITUD")
+      columnas_existentes <- columnas_adicionales[columnas_adicionales %in% names(datosFINAL_result)]
+      columnas_finales <- c(columnas_base, columnas_existentes)
+      
+      datosFINAL_result <- datosFINAL_result %>%
+        dplyr::select(all_of(columnas_finales))
 
       datos_finales_df(datosFINAL_result)
 
