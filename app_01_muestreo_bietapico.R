@@ -1765,8 +1765,15 @@ server <- function(input, output, session) {
 
       # F) Crear códigos finales y seleccionar columnas
       datosFINAL_result <- datosFINAL_result %>%
-        mutate(COD_PUNTO_CAMPO = paste0("L-X,6,PZ", COD_GRILLA_NUMERADA_ESPACIALMENTE),
-               COD_COLECTORA = sub(".*PZ", "", COD_PUNTO_CAMPO))
+        mutate(
+          COD_PUNTO_CAMPO = paste0(
+            "L-X,6,",
+            ifelse(grepl("^(MNF|MC|BAT|QDA)", LOCACION, ignore.case = TRUE), "", "PZ"),
+            COD_GRILLA_NUMERADA_ESPACIALMENTE
+          ),
+          # La colectora debe ser estable e independiente del prefijo PZ
+          COD_COLECTORA = COD_GRILLA_NUMERADA_ESPACIALMENTE
+        )
       
       # Seleccionar columnas base y añadir DISTANCIA y ALTITUD si existen
       columnas_base <- c("LOCACION", "COD_CELDA", "COD_GRILLA", "ESTE", "NORTE", "PROF", "P_SUPERPOS", "COD_PUNTO_CAMPO", "COD_COLECTORA")
