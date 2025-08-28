@@ -361,12 +361,12 @@ ui <- navbarPage(
   ),
   
   # Pestaña de Resumen de Texto (antes de Errores)
-  tabPanel("📝 Texto para el Acta",
+  tabPanel("📄 Texto para el Acta",
            fluidRow(
              column(width = 12,
                     div(class = "card fade-in",
-                        h3("Generar resumen automático del muestreo"),
-                        p("Este texto inserta valores dinámicos del área de rejilla seleccionada, el total de rejillas del marco final y el número de locaciones evaluadas."),
+                        h3("Generar texto para el Acta"),
+                        p("Este texto utiliza un formato fijo y reemplaza automáticamente los valores dinámicos del área de rejilla, el total de rejillas del marco final y el número de locaciones evaluadas."),
                         actionButton("generar_resumen_btn", "Generar resumen", class = "btn-primary"),
                         tags$hr(),
                         h4("Texto generado:"),
@@ -1402,15 +1402,21 @@ server <- function(input, output, session) {
         n_loc <- nrow(conteo_locaciones())
       } else if (!is.null(mc_fil)) {
         n_loc <- length(unique(mc_fil$LOCACION))
-      } else if (!is.null(mg)) {
-        n_loc <- length(unique(mg$LOCACION))
+      } else {
+        n_loc <- NA_integer_
       }
       
       # Marco final de grillas: restringir a celdas filtradas si existen
       total_rejillas_final <- NA_integer_
       if (!is.null(mc_fil)) {
-        ids_celdas_final <- unique(mc_fil$COD_CELDA)
-        total_rejillas_final <- nrow(mg %>% dplyr::filter(COD_CELDA %in% ids_celdas_final))
+        # Alinear tipos y limpiar espacios/mayúsculas para evitar conteos incorrectos
+        ids_celdas_final <- unique(toupper(trimws(as.character(mc_fil$COD_CELDA))))
+        mg_ids <- toupper(trimws(as.character(mg$COD_CELDA)))
+        total_rejillas_final <- sum(mg_ids %in% ids_celdas_final, na.rm = TRUE)
+        # Fallback si por alguna razón el conteo sale 0
+        if (total_rejillas_final == 0 && !is.null(parametros_calculo())) {
+          total_rejillas_final <- parametros_calculo()$N
+        }
       } else {
         total_rejillas_final <- nrow(mg)
       }
@@ -1423,18 +1429,27 @@ server <- function(input, output, session) {
       rejillas_txt <- fmt_num(total_rejillas_final)
       locaciones_txt <- fmt_num(n_loc)
       
-      # Plantilla de texto
-      texto <- paste0(
-        "Resumen del muestreo bietápico\n",
-        "--------------------------------\n",
-        "• Área de rejilla seleccionada: ", area_txt, "\n",
-        "• Total de rejillas en el marco final: ", rejillas_txt, "\n",
-        "• Número de locaciones evaluadas: ", locaciones_txt, "\n\n",
-        "Este texto fue generado automáticamente a partir de los parámetros y marcos cargados en la aplicación."
+      # Plantilla de texto del usuario con placeholders
+      template <- paste0(
+        "Para este expediente, la grilla base utilizada fue de {{AREA}}. ",
+        "Sin embargo, debido a los recortes generados durante el procesamiento en el SIG, se obtuvieron áreas de dicho tamaño junto con zonas irregulares de menor superficie. ",
+        "Cabe señalar que las grillas con un área inferior a 2 m² no son operativamente susceptibles de ser muestreadas, por lo que fueron descartadas durante la elaboración del marco muestral. ",
+        "El total restante conformó un marco muestral de {{TOTAL_REJILLAS}}.\n",
+        "La distribución de los puntos de muestreo se realizó mediante un diseño estadístico bietápico por conglomerados. ",
+        "En la primera etapa, se seleccionaron aleatoriamente las celdas dentro de cada locación, asegurando al menos una celda por locación y una distribución proporcional. ",
+        "En la segunda etapa, se eligieron aleatoriamente las rejillas dentro de las celdas seleccionadas, asignando inicialmente tres rejillas por celda y ajustando dicha asignación de forma proporcional según la disponibilidad de rejillas. ",
+        "Este enfoque permitió capturar la complejidad espacial del fenómeno y asegurar la eficiencia estadística del estudio. ",
+        "Los puntos de muestreo seleccionados se distribuyeron en las {{N_LOCACIONES}} locaciones del Lote X, según el siguiente detalle:"
       )
       
+      # Reemplazos de placeholders
+      texto <- template
+      texto <- gsub("{{AREA}}", area_txt, texto, fixed = TRUE)
+      texto <- gsub("{{TOTAL_REJILLAS}}", paste0(rejillas_txt, " rejillas"), texto, fixed = TRUE)
+      texto <- gsub("{{N_LOCACIONES}}", locaciones_txt, texto, fixed = TRUE)
+      
       texto_resumen(texto)
-      showNotification("Resumen generado.", type = "message")
+      showNotification("Texto generado para el Acta.", type = "message")
     }, error = function(e) {
       registrar_error(e, "Generación de Resumen de Texto")
       showNotification(paste("No fue posible generar el resumen:", conditionMessage(e)), type = "error")
