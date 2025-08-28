@@ -360,6 +360,26 @@ ui <- navbarPage(
            )
   ),
   
+  # Pestaña de Resumen de Texto (antes de Errores)
+  tabPanel("📝 Texto para el Acta",
+           fluidRow(
+             column(width = 12,
+                    div(class = "card fade-in",
+                        h3("Generar resumen automático del muestreo"),
+                        p("Este texto inserta valores dinámicos del área de rejilla seleccionada, el total de rejillas del marco final y el número de locaciones evaluadas."),
+                        actionButton("generar_resumen_btn", "Generar resumen", class = "btn-primary"),
+                        tags$hr(),
+                        h4("Texto generado:"),
+                        div(style = "white-space: pre-wrap;",
+                            verbatimTextOutput("resumen_texto")
+                        ),
+                        tags$br(),
+                        downloadButton("descargar_resumen_btn", "Descargar (.txt)", class = "btn-success")
+                    )
+             )
+           )
+  ),
+  
   # Pestaña de Errores - Para mostrar errores de la aplicación
   tabPanel("⚠️ Errores",
            fluidRow(
@@ -415,6 +435,9 @@ server <- function(input, output, session) {
   # Variables reactivas - Fase 4 (Pozos de referencia)
   pozos_referencia <- reactiveVal(NULL)
   datos_finales_con_distancias <- reactiveVal(NULL)
+
+  # Variable reactiva - Resumen de Texto
+  texto_resumen <- reactiveVal("")
   
   # Sistema de manejo de errores
   registro_errores_lista <- reactiveVal(list())
@@ -1360,6 +1383,81 @@ server <- function(input, output, session) {
     cat("RESULTADO:\n")
     cat("Tamaño muestral (n): ", params$n, " rejillas\n")
   })
+  
+  # ============================================================================ #
+  # GENERACIÓN DE RESUMEN DE TEXTO                                              #
+  # ============================================================================ #
+  observeEvent(input$generar_resumen_btn, {
+    tryCatch({
+      req(a_rejilla(), marco_grillas())
+      
+      # Datos base
+      area_rej <- a_rejilla()
+      mg <- marco_grillas()
+      mc_fil <- marco_celdas_filtrado()
+      
+      # Locaciones evaluadas (preferir conteo_locaciones si existe)
+      n_loc <- NA_integer_
+      if (!is.null(conteo_locaciones())) {
+        n_loc <- nrow(conteo_locaciones())
+      } else if (!is.null(mc_fil)) {
+        n_loc <- length(unique(mc_fil$LOCACION))
+      } else if (!is.null(mg)) {
+        n_loc <- length(unique(mg$LOCACION))
+      }
+      
+      # Marco final de grillas: restringir a celdas filtradas si existen
+      total_rejillas_final <- NA_integer_
+      if (!is.null(mc_fil)) {
+        ids_celdas_final <- unique(mc_fil$COD_CELDA)
+        total_rejillas_final <- nrow(mg %>% dplyr::filter(COD_CELDA %in% ids_celdas_final))
+      } else {
+        total_rejillas_final <- nrow(mg)
+      }
+      
+      # Formateo de valores
+      fmt_num <- function(x) format(x, big.mark = ",", decimal.mark = ".", scientific = FALSE)
+      fmt_area <- function(x) paste0(gsub("\\.00$", "", format(round(x, 2), nsmall = 2, trim = TRUE)), " m²")
+      
+      area_txt <- fmt_area(area_rej)
+      rejillas_txt <- fmt_num(total_rejillas_final)
+      locaciones_txt <- fmt_num(n_loc)
+      
+      # Plantilla de texto
+      texto <- paste0(
+        "Resumen del muestreo bietápico\n",
+        "--------------------------------\n",
+        "• Área de rejilla seleccionada: ", area_txt, "\n",
+        "• Total de rejillas en el marco final: ", rejillas_txt, "\n",
+        "• Número de locaciones evaluadas: ", locaciones_txt, "\n\n",
+        "Este texto fue generado automáticamente a partir de los parámetros y marcos cargados en la aplicación."
+      )
+      
+      texto_resumen(texto)
+      showNotification("Resumen generado.", type = "message")
+    }, error = function(e) {
+      registrar_error(e, "Generación de Resumen de Texto")
+      showNotification(paste("No fue posible generar el resumen:", conditionMessage(e)), type = "error")
+    })
+  })
+  
+  output$resumen_texto <- renderText({
+    req(texto_resumen())
+    texto_resumen()
+  })
+  
+  output$descargar_resumen_btn <- downloadHandler(
+    filename = function() {
+      paste("Resumen_Muestreo-", Sys.Date(), ".txt", sep = "")
+    },
+    content = function(file) {
+      txt <- texto_resumen()
+      if (is.null(txt) || identical(txt, "")) {
+        txt <- "No se ha generado ningún resumen aún."
+      }
+      writeLines(txt, file)
+    }
+  )
   
   # ============================================================================ #
   # FASE 4: MUESTREO BIETÁPICO                                                #
