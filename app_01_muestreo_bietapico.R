@@ -23,7 +23,8 @@ tryCatch({
   # Cargar scripts de funciones (estos no requieren lme4)
   r_scripts <- list.files(path = scripts_path, pattern = "\\.R$", full.names = TRUE, ignore.case = TRUE)
   # Excluir scripts que son para análisis interactivo y no para la app
-  scripts_a_excluir <- c("Revisión de listado de locaciones.R")
+  # También excluir server-fase5-handlers.R que debe cargarse dentro del servidor
+  scripts_a_excluir <- c("Revisión de listado de locaciones.R", "server-fase5-handlers.R")
   r_scripts <- r_scripts[!grepl(paste(scripts_a_excluir, collapse="|"), r_scripts)]
   for (script in r_scripts) {
     print(paste("Cargando script:", script))
@@ -355,6 +356,269 @@ ui <- navbarPage(
                                            DTOutput("tabla_muestra_final")
                                          )
                                 )
+                    )
+             )
+           )
+  ),
+  
+  # Pestaña 5 - Análisis de Resultados de Laboratorio
+  tabPanel("5. Análisis de Resultados",
+           fluidRow(
+             column(width = 3, # Columna lateral (30%)
+                    wellPanel(class = "fade-in",
+                      h3("5A. Cargar Datos", class = "fade-in"),
+                      div(class = "card",
+                        h4("Seleccione el caso de carga:"),
+                        radioButtons("caso_carga", NULL,
+                                    choices = c(
+                                      "Caso 1: Expedientes antiguos (3 archivos)" = "caso1",
+                                      "Caso 2: Expedientes recientes (2 archivos)" = "caso2"
+                                    ),
+                                    selected = "caso2"),
+                        tags$hr(),
+                        
+                        # ARCHIVO OBLIGATORIO - Resultados de Laboratorio
+                        p(strong("OBLIGATORIO:"), " Resultados de Laboratorio (BASE PRINCIPAL)"),
+                        p(em("Columnas:"), " locacion, punto, tph, prof"),
+                        fileInput("archivo_resultados_lab", "Archivo Excel Resultados Lab (REMA/RAR)",
+                                  accept = c(".xlsx", ".xls")),
+                        tags$hr(),
+                        
+                        # CASO 1: Expedientes antiguos
+                        conditionalPanel(
+                          condition = "input.caso_carga == 'caso1'",
+                          h5("Archivos adicionales para Caso 1:"),
+                          p(strong("Archivo A:"), " Coordenadas de puntos"),
+                          p(em("Columnas:"), " punto, norte, este, altitud, prof, ca"),
+                          fileInput("archivo_coordenadas", "Coordenadas Puntos",
+                                    accept = c(".xlsx", ".xls")),
+                          p(strong("Archivo B:"), " Marco de grillas"),
+                          p(em("Columnas:"), " locacion, celda_cod_plano, celda, grilla, norte, este, prof, area"),
+                          fileInput("archivo_marco_grillas", "Marco Grillas Final",
+                                    accept = c(".xlsx", ".xls"))
+                        ),
+                        
+                        # CASO 2: Expedientes recientes
+                        conditionalPanel(
+                          condition = "input.caso_carga == 'caso2'",
+                          h5("Archivo adicional para Caso 2:"),
+                          p(strong("Muestra Final:"), " Exportada de Fase 4. Muestreo Bietápico."),
+                          p(em("Nota:"), " Ya contiene coordenadas, códigos de grilla, celda, etc."),
+                          fileInput("archivo_muestra_final", "Muestra Final (Fase 4)",
+                                    accept = c(".xlsx", ".xls"))
+                        ),
+                        
+                        tags$hr(),
+                        textInput("codigo_expediente", "Código de Expediente (opcional)", 
+                                 placeholder = "Ej: 0006-5-2025"),
+                        tags$hr(),
+                        actionButton("cargar_datos_resultados_btn", "Cargar y Unificar Datos", 
+                                    class = "btn-primary btn-block")
+                      ),
+                      tags$hr(),
+                      h3("5B. Análisis Estadístico", class = "fade-in"),
+                      div(class = "card",
+                        numericInput("umbral_tph", "Umbral de contaminación TPH (mg/kg)", 
+                                    value = 10000, min = 0, step = 100),
+                        actionButton("ejecutar_analisis_btn", "Ejecutar Análisis Completo", 
+                                    class = "btn-success btn-block")
+                      ),
+                      tags$hr(),
+                      h3("5C. Cargar Shapefiles", class = "fade-in"),
+                      div(class = "card",
+                        p("Para generar vértices de polígonos contaminados"),
+                        fileInput("shp_grillas_upload", "Shapefile de Grillas (.zip)",
+                                  accept = c(".zip")),
+                        uiOutput("mapeo_columnas_grillas_ui"),
+                        tags$hr(),
+                        fileInput("shp_celdas_upload", "Shapefile de Celdas (.zip)",
+                                  accept = c(".zip")),
+                        uiOutput("mapeo_columnas_celdas_ui"),
+                        tags$hr(),
+                        actionButton("generar_vertices_btn", "Generar Vértices", 
+                                    class = "btn-warning btn-block")
+                      )
+                    )
+             ),
+             column(width = 9, # Área principal (70%)
+                    tabsetPanel(id = "tabset_fase5",
+                      tabPanel("Datos Cargados", 
+                               h3("Vista Previa de Datos Unificados", class = "fade-in"),
+                               div(class = "card fade-in",
+                                 h4("Resumen de carga de datos"),
+                                 verbatimTextOutput("resumen_carga_resultados"),
+                                 tags$br(),
+                                 downloadButton("descargar_muestra_enriquecida_btn", 
+                                               "Exportar Muestra Enriquecida (.xlsx)", 
+                                               class = "btn-success")
+                               ),
+                               div(class = "card fade-in",
+                                 h4("Muestra Enriquecida (primeras 50 filas)"),
+                                 DTOutput("tabla_muestra_enriquecida")
+                               )
+                      ),
+                      tabPanel("Análisis Nivel Grilla", 
+                               h3("Puntos de Muestreo Contaminados", class = "fade-in"),
+                               div(class = "card fade-in",
+                                 h4("Resumen de Análisis"),
+                                 verbatimTextOutput("resumen_grillas_contaminadas")
+                               ),
+                               tags$br(),
+                               tabsetPanel(id = "tabset_grillas",
+                                 tabPanel("Grillas Contaminadas",
+                                          tags$br(),
+                                          div(class = "card fade-in",
+                                            DTOutput("tabla_grillas_contaminadas"),
+                                            tags$br(),
+                                            downloadButton("descargar_grillas_contaminadas_btn", 
+                                                          "Descargar Grillas Contaminadas (.xlsx)", 
+                                                          class = "btn-success btn-sm")
+                                          )
+                                 ),
+                                 tabPanel("Todas las Grillas",
+                                          tags$br(),
+                                          div(class = "card fade-in",
+                                            DTOutput("tabla_todas_grillas"),
+                                            tags$br(),
+                                            downloadButton("descargar_todas_grillas_btn", 
+                                                          "Descargar Todas las Grillas (.xlsx)", 
+                                                          class = "btn-info btn-sm")
+                                          )
+                                 )
+                               )
+                      ),
+                      tabPanel("Análisis Nivel Celdas", 
+                               h3("Análisis Estadístico por Celdas", class = "fade-in"),
+                               div(class = "card fade-in",
+                                 h4("Resumen de Análisis"),
+                                 verbatimTextOutput("resumen_celdas_analisis")
+                               ),
+                               tags$br(),
+                               tabsetPanel(id = "tabset_celdas",
+                                 tabPanel("Celdas Contaminadas",
+                                          tags$br(),
+                                          div(class = "card fade-in",
+                                            DTOutput("tabla_celdas_contaminadas"),
+                                            tags$br(),
+                                            downloadButton("descargar_celdas_contaminadas_btn", 
+                                                          "Descargar Celdas Contaminadas (.xlsx)", 
+                                                          class = "btn-success btn-sm")
+                                          )
+                                 ),
+                                 tabPanel("Todas las Celdas",
+                                          tags$br(),
+                                          div(class = "card fade-in",
+                                            DTOutput("tabla_promedios_celdas"),
+                                            tags$br(),
+                                            downloadButton("descargar_promedios_celdas_btn", 
+                                                          "Descargar Todas las Celdas (.xlsx)", 
+                                                          class = "btn-info btn-sm")
+                                          )
+                                 )
+                               )
+                      ),
+                      tabPanel("Análisis Nivel Locaciones", 
+                               h3("Análisis Estadístico por Locaciones", class = "fade-in"),
+                               div(class = "card fade-in",
+                                 h4("Resumen de Análisis"),
+                                 verbatimTextOutput("resumen_locaciones_analisis")
+                               ),
+                               tags$br(),
+                               tabsetPanel(id = "tabset_locaciones",
+                                 tabPanel("Locaciones Contaminadas",
+                                          tags$br(),
+                                          div(class = "card fade-in",
+                                            DTOutput("tabla_locaciones_contaminadas"),
+                                            tags$br(),
+                                            downloadButton("descargar_locaciones_contaminadas_btn", 
+                                                          "Descargar Locaciones Contaminadas (.xlsx)", 
+                                                          class = "btn-success btn-sm")
+                                          )
+                                 ),
+                                 tabPanel("Todas las Locaciones",
+                                          tags$br(),
+                                          div(class = "card fade-in",
+                                            DTOutput("tabla_promedios_locaciones"),
+                                            tags$br(),
+                                            downloadButton("descargar_promedios_locaciones_btn", 
+                                                          "Descargar Todas las Locaciones (.xlsx)", 
+                                                          class = "btn-info btn-sm")
+                                          )
+                                 )
+                               )
+                      ),
+                      tabPanel("Vértices de Polígonos", 
+                               h3("Vértices de Grillas y Celdas Contaminadas", class = "fade-in"),
+                               div(class = "card fade-in",
+                                 h4("Estado de Generación de Vértices"),
+                                 verbatimTextOutput("estado_vertices")
+                               ),
+                               tags$br(),
+                               fluidRow(
+                                 column(width = 6,
+                                        div(class = "card fade-in",
+                                          h4("Vértices de Grillas Contaminadas"),
+                                          DTOutput("tabla_vertices_grillas"),
+                                          tags$br(),
+                                          downloadButton("descargar_vertices_grillas_btn", 
+                                                        "Descargar Vértices Grillas (.xlsx)", 
+                                                        class = "btn-primary btn-sm")
+                                        )),
+                                 column(width = 6,
+                                        div(class = "card fade-in",
+                                          h4("Vértices de Celdas Contaminadas"),
+                                          DTOutput("tabla_vertices_celdas"),
+                                          tags$br(),
+                                          fluidRow(
+                                            column(width = 6,
+                                                   downloadButton("descargar_vertices_celdas_tph_btn", 
+                                                                 "Descargar Vértices TPH (.xlsx)", 
+                                                                 class = "btn-primary btn-sm")),
+                                            column(width = 6,
+                                                   downloadButton("descargar_vertices_celdas_prop_btn", 
+                                                                 "Descargar Vértices Prop (.xlsx)", 
+                                                                 class = "btn-primary btn-sm"))
+                                          )
+                                        ))
+                               )
+                      ),
+                      tabPanel("Resumen final y shapefiles", 
+                               h3("Reporte Final de Resultados", class = "fade-in"),
+                               div(class = "card fade-in",
+                                 h4("Resumen Ejecutivo"),
+                                 verbatimTextOutput("reporte_final_resultados")
+                               ),
+                               tags$br(),
+                               div(class = "card fade-in",
+                                 h4("Códigos de Elementos Contaminados"),
+                                 fluidRow(
+                                   column(width = 4,
+                                          h5("Grillas Contaminadas"),
+                                          verbatimTextOutput("codigos_grillas_contaminadas")),
+                                   column(width = 4,
+                                          h5("Celdas Contaminadas"),
+                                          verbatimTextOutput("codigos_celdas_contaminadas")),
+                                   column(width = 4,
+                                          h5("Locaciones Contaminadas"),
+                                          verbatimTextOutput("codigos_locaciones_contaminadas"))
+                                 )
+                               ),
+                               tags$br(),
+                               div(class = "card fade-in",
+                                 h4("Exportar Reporte Completo"),
+                                 downloadButton("descargar_reporte_completo_btn", 
+                                               "Descargar Reporte Completo (.xlsx)", 
+                                               class = "btn-success btn-block")
+                               ),
+                               tags$br(),
+                               div(class = "card fade-in",
+                                 h4("Exportar Shapefiles Contaminados"),
+                                 p("Descarga shapefiles de grillas y celdas con columna CRITERIO_CONTAMINACION"),
+                                 downloadButton("descargar_shapefiles_contaminados_btn", 
+                                               "Descargar Shapefiles Contaminados (.zip)", 
+                                               class = "btn-warning btn-block")
+                               )
+                      )
                     )
              )
            )
@@ -2090,6 +2354,504 @@ server <- function(input, output, session) {
     cat("\n")
     cat("RESULTADO:\n")
     cat("Tamaño muestral (n): ", params$n, " rejillas\n")
+  })
+  
+  # ============================================================================ #
+  # FASE 5: ANÁLISIS DE RESULTADOS DE LABORATORIO                              #
+  # ============================================================================ #
+  
+  # Variables reactivas - Fase 5
+  muestra_enriquecida <- reactiveVal(NULL)
+  promedios_celdas_resultado <- reactiveVal(NULL)
+  promedios_locaciones_resultado <- reactiveVal(NULL)
+  vertices_grillas_resultado <- reactiveVal(NULL)
+  vertices_celdas_tph_resultado <- reactiveVal(NULL)
+  vertices_celdas_prop_resultado <- reactiveVal(NULL)
+  
+  # Variables reactivas para shapefiles
+  shp_grillas_data <- reactiveVal(NULL)
+  shp_celdas_data <- reactiveVal(NULL)
+  columnas_shp_grillas <- reactiveVal(NULL)
+  columnas_shp_celdas <- reactiveVal(NULL)
+  
+  # Cargar y unificar datos - Maneja CASO 1 y CASO 2
+  observeEvent(input$cargar_datos_resultados_btn, {
+    req(input$archivo_resultados_lab)
+    
+    tryCatch({
+      # PASO 1: Cargar y limpiar resultados de laboratorio (BASE PRINCIPAL)
+      resultados_lab <- read_excel(input$archivo_resultados_lab$datapath)
+      resultados_lab <- estandarizar_columnas(resultados_lab)
+      
+      # Verificar columnas requeridas (en MAYÚSCULAS después de estandarizar)
+      if (!all(c("PUNTO", "TPH") %in% names(resultados_lab))) {
+        stop("El archivo de resultados debe contener las columnas: punto, tph (o sus variaciones)")
+      }
+      
+      # Limpiar resultados de laboratorio
+      resultados_lab_clean <- limpiar_resultados_laboratorio(resultados_lab)
+      
+      # PASO 2: Enriquecer según el caso seleccionado
+      caso <- input$caso_carga
+      
+      if (caso == "caso1") {
+        # CASO 1: Expedientes antiguos (3 archivos)
+        showNotification("Procesando Caso 1: Expedientes antiguos...", type = "message", duration = 3)
+        
+        # Cargar archivo de coordenadas (opcional)
+        coordenadas <- NULL
+        if (!is.null(input$archivo_coordenadas)) {
+          coordenadas <- read_excel(input$archivo_coordenadas$datapath)
+          coordenadas <- estandarizar_columnas(coordenadas)
+        }
+        
+        # Cargar archivo de marco de grillas (opcional)
+        marco_grillas <- NULL
+        if (!is.null(input$archivo_marco_grillas)) {
+          marco_grillas <- read_excel(input$archivo_marco_grillas$datapath)
+          marco_grillas <- estandarizar_columnas(marco_grillas)
+        }
+        
+        # Enriquecer con Caso 1
+        muestra_enriq <- enriquecer_caso1(resultados_lab_clean, coordenadas, marco_grillas)
+        
+      } else {
+        # CASO 2: Expedientes recientes (2 archivos)
+        showNotification("Procesando Caso 2: Expedientes recientes...", type = "message", duration = 3)
+        
+        if (is.null(input$archivo_muestra_final)) {
+          stop("Para el Caso 2 debe cargar el archivo de Muestra Final (Fase 4)")
+        }
+        
+        # Cargar muestra final de Fase 4
+        muestra_final <- read_excel(input$archivo_muestra_final$datapath)
+        muestra_final <- estandarizar_columnas(muestra_final)
+        
+        # Enriquecer con Caso 2
+        muestra_enriq <- enriquecer_caso2(resultados_lab_clean, muestra_final)
+      }
+      
+      # Guardar resultado
+      muestra_enriquecida(muestra_enriq)
+      
+      # Mensaje de éxito con detalles
+      mensaje <- paste0(
+        "✓ Datos cargados y enriquecidos exitosamente\n",
+        "Registros totales: ", nrow(muestra_enriq), "\n",
+        "Columnas: ", ncol(muestra_enriq)
+      )
+      
+      showNotification(mensaje, type = "message", duration = 5)
+      updateTabsetPanel(session, "tabset_fase5", selected = "Datos Cargados")
+      
+    }, error = function(e) {
+      registrar_error(e, "Carga de Datos de Resultados")
+      showNotification(paste("Error al cargar datos:", conditionMessage(e)), type = "error", duration = 10)
+    })
+  })
+  
+  # Mostrar resumen de carga
+  output$resumen_carga_resultados <- renderPrint({
+    req(muestra_enriquecida())
+    
+    datos <- muestra_enriquecida()
+    
+    cat("═══════════════════════════════════════════\n")
+    cat("  MUESTRA FINAL ENRIQUECIDA\n")
+    cat("═══════════════════════════════════════════\n\n")
+    
+    cat("📊 INFORMACIÓN GENERAL\n")
+    cat("──────────────────────\n")
+    cat("Total de registros:", nrow(datos), "\n")
+    cat("Total de columnas:", ncol(datos), "\n\n")
+    
+    cat("📋 COLUMNAS DISPONIBLES\n")
+    cat("──────────────────────\n")
+    cat(paste(names(datos), collapse = ", "), "\n\n")
+    
+    # Información por locación
+    if ("LOCACION" %in% names(datos)) {
+      cat("📍 LOCACIONES\n")
+      cat("──────────────\n")
+      locaciones <- unique(datos$LOCACION)
+      cat("Total de locaciones únicas:", length(locaciones), "\n")
+      cat("Locaciones:", paste(head(locaciones, 10), collapse = ", "))
+      if (length(locaciones) > 10) cat(" ... y", length(locaciones) - 10, "más")
+      cat("\n\n")
+    }
+    
+    # Información de celdas y grillas
+    if ("CELDA" %in% names(datos)) {
+      cat("Celdas únicas:", length(unique(datos$CELDA)), "\n")
+    }
+    if ("GRILLA" %in% names(datos)) {
+      cat("Grillas únicas:", length(unique(datos$GRILLA)), "\n\n")
+    }
+    
+    # Estadísticas de TPH
+    if ("TPH" %in% names(datos)) {
+      cat("🧪 ESTADÍSTICAS DE TPH\n")
+      cat("──────────────────────\n")
+      cat("Mínimo:", min(datos$TPH, na.rm = TRUE), "mg/kg\n")
+      cat("Máximo:", max(datos$TPH, na.rm = TRUE), "mg/kg\n")
+      cat("Media:", round(mean(datos$TPH, na.rm = TRUE), 2), "mg/kg\n")
+      cat("Mediana:", round(median(datos$TPH, na.rm = TRUE), 2), "mg/kg\n\n")
+    }
+    
+    # Información de coordenadas
+    tiene_coords <- all(c("NORTE", "ESTE") %in% names(datos))
+    cat("📍 Coordenadas:", ifelse(tiene_coords, "✓ Disponibles", "✗ No disponibles"), "\n")
+    
+    tiene_prof <- "PROF" %in% names(datos)
+    cat("📏 Profundidad:", ifelse(tiene_prof, "✓ Disponible", "✗ No disponible"), "\n")
+    
+    cat("\n═══════════════════════════════════════════\n")
+  })
+  
+  # Mostrar tabla muestra enriquecida
+  output$tabla_muestra_enriquecida <- renderDT({
+    req(muestra_enriquecida())
+    datatable(head(muestra_enriquecida(), 50), options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE)
+  })
+  
+  # Ejecutar análisis completo
+  observeEvent(input$ejecutar_analisis_btn, {
+    req(muestra_enriquecida())
+    
+    tryCatch({
+      umbral <- input$umbral_tph
+      datos <- muestra_enriquecida()
+      
+      # Verificar columnas requeridas
+      columnas_necesarias <- c("PUNTO", "LOCACION", "TPH")
+      columnas_faltantes <- setdiff(columnas_necesarias, names(datos))
+      
+      if (length(columnas_faltantes) > 0) {
+        stop(paste("Faltan columnas requeridas:", paste(columnas_faltantes, collapse = ", ")))
+      }
+      
+      # Calcular promedios por celdas (solo si existe CELDA)
+      if ("CELDA" %in% names(datos)) {
+        prom_celdas <- calcular_promedios_celdas(datos, umbral)
+        promedios_celdas_resultado(prom_celdas)
+        showNotification("✓ Análisis por celdas completado", type = "message", duration = 3)
+      } else {
+        showNotification("⚠ No se encontró columna CELDA - análisis por celdas omitido", 
+                        type = "warning", duration = 5)
+      }
+      
+      # Calcular promedios por locaciones (siempre debe existir LOCACION)
+      prom_loc <- calcular_promedios_locaciones(datos, umbral)
+      promedios_locaciones_resultado(prom_loc)
+      showNotification("✓ Análisis por locaciones completado", type = "message", duration = 3)
+      
+      showNotification("✓ Análisis estadístico completado exitosamente", type = "message")
+      
+      # Navegar a la pestaña de Análisis Nivel Grilla
+      updateTabsetPanel(session, "tabset_fase5", selected = "Análisis Nivel Grilla")
+      
+    }, error = function(e) {
+      registrar_error(e, "Análisis Estadístico")
+      showNotification(paste("Error en análisis:", conditionMessage(e)), type = "error", duration = 10)
+    })
+  })
+  
+  # Análisis nivel grilla - outputs
+  output$resumen_grillas_contaminadas <- renderPrint({
+    req(muestra_enriquecida())
+    datos <- muestra_enriquecida()
+    umbral <- input$umbral_tph
+    grillas_contam <- datos %>% filter(TPH > umbral)
+    
+    # Obtener códigos únicos contaminados
+    codigos_unicos <- grillas_contam %>% 
+      pull(if("GRILLA" %in% names(grillas_contam)) GRILLA else PUNTO) %>% 
+      unique() %>% 
+      sort()
+    
+    cat("Total de puntos:", nrow(datos), "\n")
+    cat("Puntos contaminados:", nrow(grillas_contam), "\n")
+    cat("Contaminadas únicas (ambos criterios):", length(codigos_unicos), "\n\n")
+    cat("Códigos contaminados:\n")
+    if (length(codigos_unicos) > 0) {
+      cat(paste(codigos_unicos, collapse = ", "))
+    }
+  })
+  
+  output$tabla_grillas_contaminadas <- renderDT({
+    req(muestra_enriquecida())
+    datos <- muestra_enriquecida()
+    umbral <- input$umbral_tph
+    
+    # Añadir columna criterio_contaminacion
+    grillas_contam <- datos %>% 
+      filter(TPH > umbral) %>%
+      mutate(criterio_contaminacion = "Supera umbral TPH") %>%
+      select(criterio_contaminacion, everything())
+    
+    datatable(grillas_contam, options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE) %>%
+      formatStyle(
+        "criterio_contaminacion",
+        backgroundColor = "#dc3545",
+        color = "white",
+        fontWeight = "bold"
+      )
+  })
+  
+  output$tabla_todas_grillas <- renderDT({
+    req(muestra_enriquecida())
+    datos <- muestra_enriquecida()
+    umbral <- input$umbral_tph
+    
+    # Añadir columna criterio_contaminacion a todos
+    datos_con_criterio <- datos %>%
+      mutate(criterio_contaminacion = ifelse(TPH > umbral, "Supera umbral TPH", "No contaminada")) %>%
+      select(criterio_contaminacion, everything())
+    
+    datatable(datos_con_criterio, options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE) %>%
+      formatStyle(
+        "criterio_contaminacion",
+        backgroundColor = styleEqual(
+          c("Supera umbral TPH", "No contaminada"),
+          c("#dc3545", "#28a745")
+        ),
+        color = "white",
+        fontWeight = "bold"
+      )
+  })
+  
+  output$descargar_todas_grillas_btn <- downloadHandler(
+    filename = function() {
+      codigo_exp <- if (!is.null(input$codigo_expediente) && input$codigo_expediente != "") {
+        paste0(input$codigo_expediente, "_")
+      } else {
+        ""
+      }
+      paste0(codigo_exp, "Todas_las_Grillas-", Sys.Date(), ".xlsx")
+    },
+    content = function(file) {
+      req(muestra_enriquecida())
+      datos <- muestra_enriquecida()
+      umbral <- input$umbral_tph
+      
+      datos_con_criterio <- datos %>%
+        mutate(criterio_contaminacion = ifelse(TPH > umbral, "Supera umbral TPH", "No contaminada")) %>%
+        select(criterio_contaminacion, everything())
+      
+      openxlsx::write.xlsx(datos_con_criterio, file)
+    }
+  )
+  
+  # ============================================================================ #
+  # MANEJO DE SHAPEFILES - Detección y mapeo de columnas
+  # ============================================================================ #
+  
+  # Función auxiliar para detectar columna candidata
+  detectar_columna_candidata <- function(nombres_cols, patrones) {
+    nombres_upper <- toupper(nombres_cols)
+    for (patron in patrones) {
+      patron_upper <- toupper(patron)
+      match_idx <- which(nombres_upper == patron_upper)
+      if (length(match_idx) > 0) {
+        return(nombres_cols[match_idx[1]])
+      }
+    }
+    # Si no hay match exacto, buscar que contenga el patrón
+    for (patron in patrones) {
+      patron_upper <- toupper(patron)
+      match_idx <- which(grepl(patron_upper, nombres_upper))
+      if (length(match_idx) > 0) {
+        return(nombres_cols[match_idx[1]])
+      }
+    }
+    return(nombres_cols[1])  # Default: primera columna
+  }
+  
+  # Observer para cargar shapefile de grillas
+  observeEvent(input$shp_grillas_upload, {
+    req(input$shp_grillas_upload)
+    
+    tryCatch({
+      # Crear directorio temporal ÚNICO para grillas
+      temp_dir <- file.path(tempdir(), "shp_grillas", basename(tempfile()))
+      dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
+      unzip(input$shp_grillas_upload$datapath, exdir = temp_dir)
+      shp_files <- list.files(temp_dir, pattern = "\\.shp$", full.names = TRUE, recursive = TRUE)
+      
+      if (length(shp_files) > 0) {
+        shp <- st_read(shp_files[1], quiet = TRUE)
+        cols <- names(shp)
+        
+        # Verificar si parece ser el shapefile correcto
+        tiene_grilla <- any(grepl("GRILL|GRID", toupper(cols)))
+        tiene_celda_no_grilla <- any(grepl("CELDA|CELL", toupper(cols))) && !tiene_grilla
+        
+        if (tiene_celda_no_grilla) {
+          showNotification(
+            "⚠️ ADVERTENCIA: Este shapefile contiene 'CELDA' pero no 'GRILLA'. Parece ser un shapefile de CELDAS, no de GRILLAS. ¿Cargaste el archivo correcto?",
+            type = "warning",
+            duration = 10
+          )
+        }
+        
+        shp_grillas_data(shp)
+        columnas_shp_grillas(cols)
+        
+        msg <- if (tiene_grilla) {
+          paste("✓ Shapefile de grillas cargado. Columnas encontradas:", paste(cols, collapse = ", "))
+        } else {
+          paste("⚠️ Shapefile cargado pero no se detectó columna de grillas. Columnas:", paste(cols, collapse = ", "))
+        }
+        showNotification(msg, type = if(tiene_grilla) "message" else "warning", duration = 8)
+      }
+    }, error = function(e) {
+      showNotification(paste("Error al cargar shapefile de grillas:", e$message), type = "error")
+      registrar_error(e$message, "Carga shapefile grillas")
+    })
+  })
+  
+  # Observer para cargar shapefile de celdas
+  observeEvent(input$shp_celdas_upload, {
+    req(input$shp_celdas_upload)
+    
+    tryCatch({
+      # Crear directorio temporal ÚNICO para celdas
+      temp_dir <- file.path(tempdir(), "shp_celdas", basename(tempfile()))
+      dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
+      unzip(input$shp_celdas_upload$datapath, exdir = temp_dir)
+      shp_files <- list.files(temp_dir, pattern = "\\.shp$", full.names = TRUE, recursive = TRUE)
+      
+      if (length(shp_files) > 0) {
+        shp <- st_read(shp_files[1], quiet = TRUE)
+        cols <- names(shp)
+        
+        # Verificar si parece ser el shapefile correcto
+        tiene_celda <- any(grepl("CELDA|CELL", toupper(cols)))
+        tiene_grilla_no_celda <- any(grepl("GRILL|GRID", toupper(cols))) && !tiene_celda
+        
+        if (tiene_grilla_no_celda) {
+          showNotification(
+            "⚠️ ADVERTENCIA: Este shapefile contiene 'GRILLA' pero no 'CELDA'. Parece ser un shapefile de GRILLAS, no de CELDAS. ¿Cargaste el archivo correcto?",
+            type = "warning",
+            duration = 10
+          )
+        }
+        
+        shp_celdas_data(shp)
+        columnas_shp_celdas(cols)
+        
+        msg <- if (tiene_celda) {
+          paste("✓ Shapefile de celdas cargado. Columnas encontradas:", paste(cols, collapse = ", "))
+        } else {
+          paste("⚠️ Shapefile cargado pero no se detectó columna de celdas. Columnas:", paste(cols, collapse = ", "))
+        }
+        showNotification(msg, type = if(tiene_celda) "message" else "warning", duration = 8)
+      }
+    }, error = function(e) {
+      showNotification(paste("Error al cargar shapefile de celdas:", e$message), type = "error")
+      registrar_error(e$message, "Carga shapefile celdas")
+    })
+  })
+  
+  # UI dinámico para mapeo de columnas de grillas
+  output$mapeo_columnas_grillas_ui <- renderUI({
+    req(columnas_shp_grillas())
+    
+    cols <- columnas_shp_grillas()
+    
+    # Detectar columnas sugeridas
+    patrones_grilla <- c("GRILLA", "GRILLAS", "COD_GRILLA", "COD_GRILLAS", "GRID", "CODIGO_GRILLA")
+    patrones_locacion <- c("LOCACION", "UBICACION", "LOCATION", "LOC")
+    patrones_area <- c("AREA", "SUPERFICIE", "HECTARES", "Shape_Area")
+    
+    col_grilla_sugerida <- detectar_columna_candidata(cols, patrones_grilla)
+    col_locacion_sugerida <- detectar_columna_candidata(cols, patrones_locacion)
+    col_area_sugerida <- detectar_columna_candidata(cols, patrones_area)
+    
+    # Verificar si se encontró una columna apropiada
+    tiene_patron_grilla <- any(grepl("GRILL|GRID", toupper(paste(cols, collapse = "|"))))
+    
+    mensaje_advertencia <- if (!tiene_patron_grilla) {
+      div(style = "background-color: #fff3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; margin-bottom: 10px;",
+        icon("exclamation-triangle"),
+        strong(" ADVERTENCIA: "),
+        "No se detectó ninguna columna con 'GRILLA' o 'GRID'. ",
+        "¿Cargaste el shapefile correcto? Columnas disponibles: ",
+        paste(cols, collapse = ", ")
+      )
+    } else {
+      NULL
+    }
+    
+    tagList(
+      mensaje_advertencia,
+      p(strong("Mapeo de columnas del shapefile de grillas:"), style = "color: #0066cc;"),
+      selectInput("col_grilla_shp", "Columna de código de GRILLA:",
+                 choices = cols,
+                 selected = col_grilla_sugerida),
+      selectInput("col_locacion_grilla_shp", "Columna de LOCACIÓN:",
+                 choices = cols,
+                 selected = col_locacion_sugerida),
+      selectInput("col_area_grilla_shp", "Columna de ÁREA:",
+                 choices = cols,
+                 selected = col_area_sugerida),
+      p(em("Selecciona las columnas que identifican grilla, locación y área"), style = "font-size: 0.9em; color: #666;")
+    )
+  })
+  
+  # UI dinámico para mapeo de columnas de celdas
+  output$mapeo_columnas_celdas_ui <- renderUI({
+    req(columnas_shp_celdas())
+    
+    cols <- columnas_shp_celdas()
+    
+    # Detectar columnas sugeridas
+    patrones_celda <- c("CELDA", "CELDAS", "COD_CELDA", "COD_CELDAS", "CELL", "CODIGO_CELDA", "COD_UNIC")
+    patrones_locacion <- c("LOCACION", "UBICACION", "LOCATION", "LOC")
+    patrones_area <- c("AREA", "SUPERFICIE", "HECTARES", "Shape_Area")
+    
+    col_celda_sugerida <- detectar_columna_candidata(cols, patrones_celda)
+    col_locacion_sugerida <- detectar_columna_candidata(cols, patrones_locacion)
+    col_area_sugerida <- detectar_columna_candidata(cols, patrones_area)
+    
+    # Verificar si se encontró una columna apropiada
+    tiene_patron_celda <- any(grepl("CELD|CELL", toupper(paste(cols, collapse = "|"))))
+    
+    mensaje_advertencia <- if (!tiene_patron_celda) {
+      div(style = "background-color: #fff3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; margin-bottom: 10px;",
+        icon("exclamation-triangle"),
+        strong(" ADVERTENCIA: "),
+        "No se detectó ninguna columna con 'CELDA' o 'CELL'. ",
+        "¿Cargaste el shapefile correcto? Columnas disponibles: ",
+        paste(cols, collapse = ", ")
+      )
+    } else {
+      NULL
+    }
+    
+    tagList(
+      mensaje_advertencia,
+      p(strong("Mapeo de columnas del shapefile de celdas:"), style = "color: #0066cc;"),
+      selectInput("col_celda_shp", "Columna de código de CELDA:",
+                 choices = cols,
+                 selected = col_celda_sugerida),
+      selectInput("col_locacion_celda_shp", "Columna de LOCACIÓN:",
+                 choices = cols,
+                 selected = col_locacion_sugerida),
+      selectInput("col_area_celda_shp", "Columna de ÁREA:",
+                 choices = cols,
+                 selected = col_area_sugerida),
+      p(em("Selecciona las columnas que identifican celda, locación y área"), style = "font-size: 0.9em; color: #666;")
+    )
+  })
+  
+  # Cargar handlers y outputs adicionales de Fase 5
+  # IMPORTANTE: local = TRUE para ejecutar en el entorno del servidor con acceso a output, input, session
+  tryCatch({
+    source("scripts/server-fase5-handlers.R", local = TRUE, encoding = "UTF-8")
+  }, error = function(e) {
+    message("Nota: No se pudieron cargar handlers adicionales de Fase 5: ", e$message)
+    registrar_error(e$message, "Carga de handlers Fase 5")
   })
   
   # ============================================================================ #

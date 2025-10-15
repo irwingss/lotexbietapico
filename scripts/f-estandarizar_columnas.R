@@ -12,17 +12,27 @@ estandarizar_columnas <- function(df) {
   # Mapeo de posibles variaciones a nombres estándar
   mapeo_columnas <- list(
     # Coordenadas Este
-    "ESTE" = c("este", "Este", "ESTE", "x", "X", "coord_x", "COORD_X"),
+    "ESTE" = c("este", "Este", "x", "X", "coord_x", "COORD_X"),
     # Coordenadas Norte  
-    "NORTE" = c("norte", "Norte", "NORTE", "y", "Y", "coord_y", "COORD_Y"),
+    "NORTE" = c("norte", "Norte", "y", "Y", "coord_y", "COORD_Y"),
     # Profundidad
-    "PROF" = c("prof", "Prof", "PROF", "profundidad", "Profundidad", "PROFUNDIDAD", "depth", "DEPTH"),
-    # Código de celda
-    "COD_CELDA" = c("cod_celda", "Cod_Celda", "COD_CELDA", "codigo_celda", "CODIGO_CELDA", "celda", "CELDA"),
+    "PROF" = c("prof", "Prof", "profundidad", "Profundidad", "depth", "DEPTH"),
+    # Celda (código simple)
+    "CELDA" = c("celda", "Celda"),
+    # Código de celda (con prefijo cod_)
+    "COD_CELDA" = c("cod_celda", "Cod_Celda", "codigo_celda", "CODIGO_CELDA"),
+    # Grilla
+    "GRILLA" = c("grilla", "Grilla"),
+    # Código de grilla (con prefijo cod_)
+    "COD_GRILLA" = c("cod_grilla", "Cod_Grilla", "codigo_grilla", "CODIGO_GRILLA"),
     # Locación
-    "LOCACION" = c("locacion", "Locacion", "LOCACION", "ubicacion", "UBICACION", "location", "LOCATION"),
+    "LOCACION" = c("locacion", "Locacion", "ubicacion", "UBICACION", "location", "LOCATION"),
     # Área
-    "AREA" = c("area", "Area", "AREA", "superficie", "SUPERFICIE")
+    "AREA" = c("area", "Area", "superficie", "SUPERFICIE"),
+    # Punto
+    "PUNTO" = c("punto", "Punto"),
+    # TPH
+    "TPH" = c("tph", "Tph")
   )
   
   # Aplicar el mapeo
