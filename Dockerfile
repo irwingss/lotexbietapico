@@ -17,17 +17,18 @@ RUN apt-get update && apt-get install -y \
 RUN R -e "install.packages(c(\
     'shiny', 'shinydashboard', 'readxl', 'DT', 'dplyr', \
     'TeachingSampling', 'dbscan', 'purrr', 'openxlsx', 'sf', \
-    'colourpicker', 'uuid'), repos='https://cran.rstudio.com/')"
+    'colourpicker', 'uuid', 'tidyr', 'stringr', 'survey'), repos='https://cran.rstudio.com/')"
 
 # Copiar la aplicación
 COPY . /srv/shiny-server/app/
 WORKDIR /srv/shiny-server/app
 
 # Crear un script para iniciar la aplicación
-RUN echo '#!/bin/sh\nR -e "shiny::runApp(\"/srv/shiny-server/app/app_01_muestreo_bietapico.R\", host=\"0.0.0.0\", port=3838)"' > /usr/bin/start_app.sh \
+# Usar variable de entorno PORT si existe, sino usar 3838 por defecto
+RUN echo '#!/bin/sh\nPORT=${PORT:-3838}\nR -e "shiny::runApp(\"/srv/shiny-server/app/app_01_muestreo_bietapico.R\", host=\"0.0.0.0\", port=as.integer(Sys.getenv(\"PORT\", \"3838\")))"' > /usr/bin/start_app.sh \
     && chmod +x /usr/bin/start_app.sh
 
-# Exponer el puerto de shiny
+# Exponer el puerto de shiny (Render lo asignará dinámicamente)
 EXPOSE 3838
 
 # Comando para iniciar la app
