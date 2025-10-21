@@ -9,6 +9,7 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 library(survey)
+library(sf)  # Para matching espacial con shapefiles
 
 # ---------------------------------------------------------------------------- #
 # FUNCIÓN: limpiar_resultados_laboratorio
@@ -75,7 +76,186 @@ unificar_rar_muestra <- function(rar_data, muestra_data, columnas_seleccionadas 
 }
 
 # ---------------------------------------------------------------------------- #
-# FUNCIÓN: enriquecer_caso1
+# FUNCIÓN: enriquecer_caso1_espacial
+# CASO 1: Expedientes antiguos - Enriquece resultados_lab con matching ESPACIAL
+# Usa st_intersects para asegurar que el punto caiga DENTRO de la grilla
+# ---------------------------------------------------------------------------- #
+enriquecer_caso1_espacial <- function(resultados_lab, coordenadas_puntos, marco_grillas_sf) {
+  # NOTA: Todas las columnas ya están en MAYÚSCULAS
+  
+  # ==== CAPTURAR PUNTOS ORIGINALES PARA DIAGNÓSTICO ====
+  puntos_lab_original <- unique(trimws(as.character(resultados_lab$PUNTO)))
+  puntos_coord_original <- unique(trimws(as.character(coordenadas_puntos$PUNTO)))
+  
+  # Paso 1: Enriquecer con coordenadas de puntos (por código de punto)
+  if (is.null(coordenadas_puntos)) {
+    stop("Se requiere el archivo de coordenadas para el Caso 1")
+  }
+  
+  # Verificar que coordenadas tenga las columnas necesarias
+  if (!all(c("PUNTO", "NORTE", "ESTE") %in% names(coordenadas_puntos))) {
+    stop("El archivo de coordenadas debe contener: PUNTO, NORTE, ESTE")
+  }
+  
+  # Identificar puntos en cada archivo
+  puntos_solo_en_lab <- setdiff(puntos_lab_original, puntos_coord_original)
+  puntos_solo_en_coord <- setdiff(puntos_coord_original, puntos_lab_original)
+  puntos_en_ambos <- intersect(puntos_lab_original, puntos_coord_original)
+  
+  # Seleccionar columnas útiles de coordenadas
+  cols_coord <- intersect(
+    c("PUNTO", "NORTE", "ESTE", "ALTITUD", "PROF", "CA"),
+    names(coordenadas_puntos)
+  )
+  
+  resultados_enriq <- resultados_lab %>%
+    left_join(
+      coordenadas_puntos %>% select(all_of(cols_coord)),
+      by = "PUNTO",
+      suffix = c("", "_COORD")
+    )
+  
+  # Si hay columnas duplicadas, preferir las del archivo de coordenadas
+  if ("PROF_COORD" %in% names(resultados_enriq)) {
+    resultados_enriq <- resultados_enriq %>%
+      mutate(PROF = coalesce(PROF_COORD, PROF)) %>%
+      select(-PROF_COORD)
+  }
+  
+  # Paso 2: MATCHING ESPACIAL con marco de grillas (si existe)
+  if (!is.null(marco_grillas_sf)) {
+    # Verificar que tenemos coordenadas NORTE y ESTE
+    if (!all(c("NORTE", "ESTE") %in% names(resultados_enriq))) {
+      warning("No se puede hacer matching espacial: faltan coordenadas NORTE/ESTE")
+      return(resultados_enriq)
+    }
+    
+    # Filtrar registros con coordenadas válidas
+    datos_con_coords <- resultados_enriq %>%
+      filter(!is.na(NORTE) & !is.na(ESTE))
+    
+    datos_sin_coords <- resultados_enriq %>%
+      filter(is.na(NORTE) | is.na(ESTE))
+    
+    if (nrow(datos_con_coords) == 0) {
+      warning("No hay registros con coordenadas válidas para matching espacial")
+      return(resultados_enriq)
+    }
+    
+    # Convertir puntos a objeto sf
+    # Asumir sistema de coordenadas UTM (el más común en Perú es EPSG:32718 - WGS 84 / UTM zone 18S)
+    puntos_sf <- st_as_sf(
+      datos_con_coords,
+      coords = c("ESTE", "NORTE"),
+      crs = st_crs(marco_grillas_sf),  # Usar el mismo CRS del shapefile
+      remove = FALSE  # Mantener las columnas ESTE y NORTE
+    )
+    
+    # MATCHING ESPACIAL con st_join usando st_intersects
+    # st_intersects asegura que el punto esté DENTRO del polígono, no cerca
+    puntos_enriquecidos_sf <- st_join(
+      puntos_sf,
+      marco_grillas_sf,
+      join = st_intersects,  # ← Punto debe estar DENTRO
+      left = TRUE,  # Mantener todos los puntos, incluso sin match
+      suffix = c("", "_MARCO")
+    )
+    
+    # Convertir de vuelta a data.frame
+    puntos_enriquecidos <- puntos_enriquecidos_sf %>%
+      st_drop_geometry()
+    
+    # Resolver duplicados de LOCACION si existen
+    if ("LOCACION_MARCO" %in% names(puntos_enriquecidos)) {
+      puntos_enriquecidos <- puntos_enriquecidos %>%
+        mutate(LOCACION = coalesce(LOCACION_MARCO, LOCACION)) %>%
+        select(-LOCACION_MARCO)
+    }
+    
+    # Combinar con los datos sin coordenadas
+    if (nrow(datos_sin_coords) > 0) {
+      resultados_final <- bind_rows(puntos_enriquecidos, datos_sin_coords)
+    } else {
+      resultados_final <- puntos_enriquecidos
+    }
+    
+    # ==== CAPTURAR PUNTOS PROBLEMÁTICOS PARA DIAGNÓSTICO ====
+    
+    # Puntos sin coordenadas
+    puntos_sin_coords_df <- resultados_final %>%
+      filter(is.na(NORTE) | is.na(ESTE)) %>%
+      select(PUNTO, LOCACION, any_of(c("TPH", "PROF"))) %>%
+      mutate(RAZON = "No tiene coordenadas en archivo de coordenadas")
+    
+    # Puntos sin match espacial (tienen coordenadas pero no cayeron en ninguna grilla)
+    puntos_sin_match_espacial <- resultados_final %>%
+      filter(!is.na(NORTE) & !is.na(ESTE) & is.na(GRILLA)) %>%
+      select(PUNTO, LOCACION, NORTE, ESTE, any_of(c("TPH", "PROF"))) %>%
+      mutate(RAZON = "El punto no cae dentro de ninguna grilla del shapefile")
+    
+    # Reportar estadísticas de matching
+    n_total <- nrow(resultados_final)
+    n_con_match <- sum(!is.na(resultados_final$GRILLA))
+    n_sin_match <- n_total - n_con_match
+    
+    message(sprintf(
+      "Matching espacial completado:\n  - Total registros: %d\n  - Con match espacial: %d (%.1f%%)\n  - Sin match espacial: %d (%.1f%%)",
+      n_total, n_con_match, (n_con_match/n_total)*100, n_sin_match, (n_sin_match/n_total)*100
+    ))
+    
+    # ==== CREAR DIAGNÓSTICO COMPLETO ====
+    diagnostico <- list(
+      # Matching Lab-Coordenadas
+      n_puntos_lab_original = length(puntos_lab_original),
+      n_puntos_coord_original = length(puntos_coord_original),
+      n_puntos_en_ambos = length(puntos_en_ambos),
+      n_puntos_solo_lab = length(puntos_solo_en_lab),
+      n_puntos_solo_coord = length(puntos_solo_en_coord),
+      puntos_solo_en_lab = puntos_solo_en_lab,
+      puntos_solo_en_coord = puntos_solo_en_coord,
+      
+      # Matching espacial
+      n_puntos_finales = n_total,
+      n_con_match_espacial = n_con_match,
+      n_sin_match_espacial = n_sin_match,
+      n_sin_coordenadas = nrow(puntos_sin_coords_df),
+      puntos_sin_coordenadas = puntos_sin_coords_df,
+      puntos_sin_match_espacial = puntos_sin_match_espacial,
+      
+      # Indicadores de problemas
+      tiene_problema_coords = length(puntos_solo_en_lab) > 0,
+      tiene_problema_espacial = n_sin_match > 0
+    )
+    
+    # Retornar datos y diagnóstico
+    return(list(
+      datos = resultados_final,
+      diagnostico = diagnostico
+    ))
+    
+  } else {
+    # Si no hay shapefile, retornar solo con coordenadas (sin diagnóstico espacial)
+    diagnostico <- list(
+      n_puntos_lab_original = length(puntos_lab_original),
+      n_puntos_coord_original = length(puntos_coord_original),
+      n_puntos_en_ambos = length(puntos_en_ambos),
+      n_puntos_solo_lab = length(puntos_solo_en_lab),
+      n_puntos_solo_coord = length(puntos_solo_en_coord),
+      puntos_solo_en_lab = puntos_solo_en_lab,
+      puntos_solo_en_coord = puntos_solo_en_coord,
+      n_puntos_finales = nrow(resultados_enriq),
+      tiene_problema_coords = length(puntos_solo_en_lab) > 0
+    )
+    
+    return(list(
+      datos = resultados_enriq,
+      diagnostico = diagnostico
+    ))
+  }
+}
+
+# ---------------------------------------------------------------------------- #
+# FUNCIÓN: enriquecer_caso1 (LEGACY - mantener por compatibilidad)
 # CASO 1: Expedientes antiguos - Enriquece resultados_lab con coordenadas y marco_grillas
 # ---------------------------------------------------------------------------- #
 enriquecer_caso1 <- function(resultados_lab, coordenadas_puntos, marco_grillas) {
@@ -137,20 +317,37 @@ enriquecer_caso1 <- function(resultados_lab, coordenadas_puntos, marco_grillas) 
 # ---------------------------------------------------------------------------- #
 # FUNCIÓN: enriquecer_caso2
 # CASO 2: Expedientes recientes - Une resultados_lab con muestra_final de Fase 4
+# RETORNA: lista con $datos y $diagnostico para identificar puntos perdidos
 # ---------------------------------------------------------------------------- #
 enriquecer_caso2 <- function(resultados_lab, muestra_final) {
   # NOTA: Todas las columnas ya están en MAYÚSCULAS
   
+  # ==== DIAGNÓSTICO PREVIO ====
+  # Capturar puntos originales antes del join
+  puntos_muestra_original <- unique(trimws(as.character(muestra_final$PUNTO)))
+  puntos_lab_original <- unique(trimws(as.character(resultados_lab$PUNTO)))
+  
+  # Normalizar códigos de punto para comparación (trimws ya aplicado)
+  muestra_final_norm <- muestra_final %>%
+    mutate(PUNTO_ORIGINAL = PUNTO,
+           PUNTO = trimws(as.character(PUNTO)))
+  
+  resultados_lab_norm <- resultados_lab %>%
+    mutate(PUNTO_ORIGINAL = PUNTO,
+           PUNTO = trimws(as.character(PUNTO)))
+  
+  # Identificar qué puntos están en cada archivo
+  puntos_solo_en_muestra <- setdiff(puntos_muestra_original, puntos_lab_original)
+  puntos_solo_en_lab <- setdiff(puntos_lab_original, puntos_muestra_original)
+  puntos_en_ambos <- intersect(puntos_muestra_original, puntos_lab_original)
+  
   # La muestra final ya tiene toda la información necesaria
   # Solo necesitamos unir los valores de TPH desde resultados_lab
   
-  # Columnas útiles de muestra_final (excluir TPH si existe)
-  cols_muestra <- setdiff(names(muestra_final), c("TPH"))
-  
   # Unir por PUNTO
-  datos_enriquecidos <- muestra_final %>%
+  datos_enriquecidos <- muestra_final_norm %>%
     left_join(
-      resultados_lab %>% select(PUNTO, LOCACION, TPH, PROF),
+      resultados_lab_norm %>% select(PUNTO, LOCACION, TPH, PROF),
       by = "PUNTO",
       suffix = c("", "_LAB")
     )
@@ -168,11 +365,36 @@ enriquecer_caso2 <- function(resultados_lab, muestra_final) {
       select(-PROF_LAB)
   }
   
+  # ==== CAPTURAR PUNTOS SIN TPH ANTES DE FILTRAR ====
+  puntos_sin_tph <- datos_enriquecidos %>%
+    filter(is.na(TPH)) %>%
+    select(PUNTO, LOCACION, any_of(c("GRILLA", "CELDA", "COD_GRILLA", "COD_CELDA"))) %>%
+    mutate(RAZON = "No se encontró en archivo de laboratorio")
+  
   # Filtrar solo puntos que tienen TPH (están en resultados_lab)
   datos_enriquecidos <- datos_enriquecidos %>%
     filter(!is.na(TPH))
   
-  return(datos_enriquecidos)
+  # ==== CREAR DIAGNÓSTICO COMPLETO ====
+  diagnostico <- list(
+    n_puntos_muestra_original = length(puntos_muestra_original),
+    n_puntos_lab_original = length(puntos_lab_original),
+    n_puntos_en_ambos = length(puntos_en_ambos),
+    n_puntos_solo_muestra = length(puntos_solo_en_muestra),
+    n_puntos_solo_lab = length(puntos_solo_en_lab),
+    n_puntos_perdidos = nrow(puntos_sin_tph),
+    n_puntos_finales = nrow(datos_enriquecidos),
+    puntos_solo_en_muestra = puntos_solo_en_muestra,
+    puntos_solo_en_lab = puntos_solo_en_lab,
+    puntos_sin_tph = puntos_sin_tph,
+    tiene_problema = length(puntos_solo_en_muestra) > 0
+  )
+  
+  # Retornar datos y diagnóstico
+  return(list(
+    datos = datos_enriquecidos,
+    diagnostico = diagnostico
+  ))
 }
 
 # ---------------------------------------------------------------------------- #
@@ -414,7 +636,8 @@ get_vertices <- function(sf_obj, code_col, codes) {
 # Genera tabla de vértices de grillas contaminadas con información enriquecida
 # ---------------------------------------------------------------------------- #
 generar_vertices_grillas <- function(shp_marco_grillas, muestra_final_e, 
-                                     superan_grilla, punto_col = "punto") {
+                                     superan_grilla, punto_col = "punto", 
+                                     umbral = 10000) {
   # Obtener vértices de las grillas contaminadas
   vertices_grillas <- get_vertices(
     sf_obj = shp_marco_grillas,
@@ -449,7 +672,10 @@ generar_vertices_grillas <- function(shp_marco_grillas, muestra_final_e,
     mutate(COD_GRILLA = to_key(COD_GRILLA)) %>%
     left_join(attrs_grillas, by = "COD_GRILLA") %>%
     inner_join(lk_punto_grilla, by = "COD_GRILLA") %>%
-    relocate(codigo_punto, tph, LOCACION, COD_GRILLA, AREA, .before = part_id) %>%
+    mutate(
+      criterio_contaminacion = ifelse(tph > umbral, "Supera umbral TPH", "No contaminada")
+    ) %>%
+    relocate(criterio_contaminacion, codigo_punto, tph, LOCACION, COD_GRILLA, AREA, .before = part_id) %>%
     rename(ESTE = X, NORTE = Y)
   
   return(vertices_grillas_enriq)
@@ -540,7 +766,21 @@ generar_vertices_celdas <- function(shp_marco_celdas, Promedio_celdas_final,
     left_join(attrs_celdas, by = "COD_UNIC") %>%
     left_join(prom_celdas, by = "COD_UNIC") %>%
     left_join(prop_superan, by = "COD_UNIC") %>%
-    relocate(COD_UNIC, LOCACION, AREA, tph_celda, puntos_superan, prop_superan_pct, .before = part_id) %>%
+    mutate(
+      # Calcular proporción decimal para comparación
+      prop_decimal = prop_superan_pct / 100,
+      # Determinar criterio de contaminación
+      contaminada_por_tph = ifelse(!is.na(tph_celda) & tph_celda > umbral, TRUE, FALSE),
+      contaminada_por_proporcion = ifelse(!is.na(prop_decimal) & prop_decimal > 0.5, TRUE, FALSE),
+      criterio_contaminacion = case_when(
+        contaminada_por_tph & contaminada_por_proporcion ~ "Ambos criterios",
+        contaminada_por_tph ~ "Solo TPH promedio",
+        contaminada_por_proporcion ~ "Solo proporción",
+        TRUE ~ "No contaminada"
+      )
+    ) %>%
+    select(-prop_decimal, -contaminada_por_tph, -contaminada_por_proporcion) %>%
+    relocate(criterio_contaminacion, COD_UNIC, LOCACION, AREA, tph_celda, puntos_superan, prop_superan_pct, .before = part_id) %>%
     rename(ESTE = X, NORTE = Y)
   
   return(out)

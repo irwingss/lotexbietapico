@@ -56,6 +56,26 @@ ui <- navbarPage(
         $(document).on('shiny:connected', function() {
           $('.fade-in').addClass('fade-in');
         });
+      "),
+      # Script para prevenir scroll automático en fileInput
+      tags$script("
+        $(document).ready(function() {
+          // Prevenir scroll automático cuando se abre el diálogo de archivos
+          $('body').on('focus', 'input[type=\"file\"]', function(e) {
+            var scrollPos = $(window).scrollTop();
+            setTimeout(function() {
+              $(window).scrollTop(scrollPos);
+            }, 0);
+          });
+          
+          // También prevenir en el cambio
+          $('body').on('change', 'input[type=\"file\"]', function(e) {
+            var scrollPos = $(window).scrollTop();
+            setTimeout(function() {
+              $(window).scrollTop(scrollPos);
+            }, 0);
+          });
+        });
       ")
     ),
     # Indicador de simulación activa
@@ -170,6 +190,31 @@ ui <- navbarPage(
                       div(class = "card",
                         actionButton("verificar_marcos_btn", "Verificar integridad", 
                                     class = "btn-success btn-block")
+                      ),
+                      tags$hr(),
+                      h3("2C. Adicional: Revisión de Marcos Shapefile", class = "fade-in"),
+                      div(class = "card",
+                        p(style = "font-size: 13px; color: #555;", 
+                          tags$b("Propósito:"), " Validar coherencia espacial entre grillas y celdas usando shapefiles."),
+                        p(style = "font-size: 13px; color: #555;", 
+                          "Esta herramienta identifica:",
+                          tags$ul(
+                            tags$li(tags$b("Grillas fuera de celdas:"), " Grillas cuyos centroides caen fuera de cualquier celda"),
+                            tags$li(tags$b("Asignación incorrecta:"), " Grillas con código de celda que no corresponde")
+                          )
+                        ),
+                        fileInput("archivo_shp_grillas_verif", 
+                                 "📍 Shapefile de GRILLAS (ZIP)", 
+                                 accept = ".zip",
+                                 placeholder = "Seleccionar archivo ZIP"),
+                        fileInput("archivo_shp_celdas_verif", 
+                                 "🔲 Shapefile de CELDAS (ZIP)", 
+                                 accept = ".zip",
+                                 placeholder = "Seleccionar archivo ZIP"),
+                        tags$hr(),
+                        actionButton("verificar_espacial_btn", 
+                                    "🔍 Ejecutar Verificación Espacial", 
+                                    class = "btn-warning btn-block")
                       )
                     )
              ),
@@ -239,6 +284,51 @@ ui <- navbarPage(
                                           downloadButton("download_celdas_no_en_marco", "Descargar XLSX", class = "btn-sm btn-info"),
                                           uiOutput("sugerencia_celdas_no_en_marco"),
                                           uiOutput("resumen_verificacion_cruzada")
+                                        ))
+                               )),
+                      tabPanel("🚨 Grillas Fuera de Celdas", 
+                               h3("Identificación de Grillas Fuera de Celdas", class = "fade-in"),
+                               div(class = "alert alert-warning",
+                                 h4("⚠️ Problema Detectado"),
+                                 p("Las siguientes grillas tienen sus centroides FUERA de cualquier polígono de celda. 
+                                   Esto indica un error geométrico que debe corregirse."),
+                                 hr(),
+                                 h5("📊 Resumen de Verificación"),
+                                 uiOutput("resumen_grillas_fuera")
+                               ),
+                               fluidRow(
+                                 column(width = 12,
+                                        div(class = "card fade-in",
+                                          h4("Listado de Grillas Problemáticas"),
+                                          DTOutput("tabla_grillas_fuera"),
+                                          hr(),
+                                          downloadButton("descargar_marco_grillas_limpio_btn", 
+                                                        "📥 Descargar Marco de Grillas Limpio (ZIP)", 
+                                                        class = "btn-success btn-lg"),
+                                          p(style = "margin-top: 10px; font-size: 12px; color: #666;",
+                                            "Este archivo ZIP contendrá el shapefile de grillas sin las grillas problemáticas identificadas.")
+                                        ))
+                               )),
+                      tabPanel("⚠️ Códigos de Celda Incorrectos", 
+                               h3("Verificación de Asignación de Códigos de Celda", class = "fade-in"),
+                               div(class = "alert alert-info",
+                                 h4("ℹ️ Sobre esta verificación"),
+                                 p("Esta herramienta verifica si el código de celda asignado a cada grilla (columna CELDA o COD_CELDA) 
+                                   coincide con la celda donde realmente cae el centroide de la grilla."),
+                                 p(tags$b("Regla:"), " Una grilla pertenece a la celda donde su centroide cae dentro."),
+                                 hr(),
+                                 h5("📊 Resumen de Verificación"),
+                                 uiOutput("resumen_celdas_mal_asignadas")
+                               ),
+                               fluidRow(
+                                 column(width = 12,
+                                        div(class = "card fade-in",
+                                          h4("Grillas con Código de Celda Incorrecto"),
+                                          DTOutput("tabla_celdas_mal_asignadas"),
+                                          p(style = "margin-top: 10px; font-size: 12px; color: #666;",
+                                            tags$b("CELDA_ASIGNADA:"), " Código que tiene actualmente en el shapefile", br(),
+                                            tags$b("CELDA_REAL:"), " Código de la celda donde realmente cae el centroide", br(),
+                                            tags$b("PROBLEMA:"), " Tipo de inconsistencia detectada")
                                         ))
                                ))
                     )
@@ -370,42 +460,81 @@ ui <- navbarPage(
                       div(class = "card",
                         h4("Seleccione el caso de carga:"),
                         radioButtons("caso_carga", NULL,
-                                    choices = c(
-                                      "Caso 1: Expedientes antiguos (3 archivos)" = "caso1",
-                                      "Caso 2: Expedientes recientes (2 archivos)" = "caso2"
-                                    ),
-                                    selected = "caso2"),
+                          choiceNames = list(
+                            tags$div(style = "line-height: 1.5;",
+                              tags$div(style = "font-weight: bold; font-size: 15px; color: #0066cc; margin-bottom: 3px;",
+                                "📍 MATCHING ESPACIAL"),
+                              tags$div(style = "font-size: 13px; color: #555;",
+                                "Caso 1: Expedientes antiguos (3 archivos)")
+                            ),
+                            tags$div(style = "line-height: 1.5;",
+                              tags$div(style = "font-weight: bold; font-size: 15px; color: #28a745; margin-bottom: 3px;",
+                                "🔗 MATCHING POR CÓDIGOS DE PUNTO"),
+                              tags$div(style = "font-size: 13px; color: #555;",
+                                "Caso 2: Expedientes recientes (2 archivos)")
+                            )
+                          ),
+                          choiceValues = list("caso1", "caso2"),
+                          selected = "caso2"
+                        ),
                         tags$hr(),
                         
                         # ARCHIVO OBLIGATORIO - Resultados de Laboratorio
-                        p(strong("OBLIGATORIO:"), " Resultados de Laboratorio (BASE PRINCIPAL)"),
-                        p(em("Columnas:"), " locacion, punto, tph, prof"),
-                        fileInput("archivo_resultados_lab", "Archivo Excel Resultados Lab (REMA/RAR)",
+                        div(style = "background-color: #e7f3ff; border-left: 4px solid #0066cc; padding: 12px; margin-bottom: 15px; border-radius: 4px;",
+                          tags$div(style = "font-weight: bold; font-size: 14px; color: #0066cc; margin-bottom: 5px;",
+                            icon("flask"), " ARCHIVO OBLIGATORIO: Resultados de Laboratorio"),
+                          tags$div(style = "font-size: 12px; color: #555;",
+                            "📋 Base principal del análisis (REMA/RAR)")
+                        ),
+                        fileInput("archivo_resultados_lab", "Seleccionar archivo Excel:",
                                   accept = c(".xlsx", ".xls")),
+                        uiOutput("mapeo_columnas_lab_ui"),
                         tags$hr(),
                         
                         # CASO 1: Expedientes antiguos
                         conditionalPanel(
                           condition = "input.caso_carga == 'caso1'",
-                          h5("Archivos adicionales para Caso 1:"),
-                          p(strong("Archivo A:"), " Coordenadas de puntos"),
-                          p(em("Columnas:"), " punto, norte, este, altitud, prof, ca"),
-                          fileInput("archivo_coordenadas", "Coordenadas Puntos",
+                          h5("📂 Archivos adicionales para Caso 1:", style = "color: #0066cc; margin-top: 10px;"),
+                          
+                          # Archivo A: Coordenadas
+                          div(style = "background-color: #fff9e6; border-left: 4px solid #ff9800; padding: 10px; margin-bottom: 10px; border-radius: 4px;",
+                            tags$div(style = "font-weight: bold; font-size: 13px; color: #ff9800; margin-bottom: 3px;",
+                              icon("map-marker"), " ARCHIVO A: Coordenadas de puntos (tabla de coordenadasdel REMA)"),
+                            tags$div(style = "font-size: 11px; color: #666;",
+                              "📍 Obligatorio para matching espacial")
+                          ),
+                          fileInput("archivo_coordenadas", "Seleccionar Excel de coordenadas:",
                                     accept = c(".xlsx", ".xls")),
-                          p(strong("Archivo B:"), " Marco de grillas"),
-                          p(em("Columnas:"), " locacion, celda_cod_plano, celda, grilla, norte, este, prof, area"),
-                          fileInput("archivo_marco_grillas", "Marco Grillas Final",
-                                    accept = c(".xlsx", ".xls"))
+                          uiOutput("mapeo_columnas_coords_ui"),
+                          
+                          tags$hr(style = "margin: 15px 0;"),
+                          
+                          # Archivo B: Shapefile
+                          div(style = "background-color: #f0f8ff; border-left: 4px solid #2196f3; padding: 10px; margin-bottom: 10px; border-radius: 4px;",
+                            tags$div(style = "font-weight: bold; font-size: 13px; color: #2196f3; margin-bottom: 3px;",
+                              icon("globe"), " ARCHIVO B: Marco de grillas (Shapefile)"),
+                            tags$div(style = "font-size: 11px; color: #666;",
+                              "🗺️ Los puntos deben caer DENTRO de las grillas")
+                          ),
+                          fileInput("archivo_marco_grillas_shp", "Seleccionar ZIP shapefile:",
+                                    accept = c(".zip")),
+                          uiOutput("mapeo_columnas_marco_shp_ui")
                         ),
                         
                         # CASO 2: Expedientes recientes
                         conditionalPanel(
                           condition = "input.caso_carga == 'caso2'",
-                          h5("Archivo adicional para Caso 2:"),
-                          p(strong("Muestra Final:"), " Exportada de Fase 4. Muestreo Bietápico."),
-                          p(em("Nota:"), " Ya contiene coordenadas, códigos de grilla, celda, etc."),
-                          fileInput("archivo_muestra_final", "Muestra Final (Fase 4)",
-                                    accept = c(".xlsx", ".xls"))
+                          h5("📂 Archivo adicional para Caso 2:", style = "color: #28a745; margin-top: 10px;"),
+                          
+                          div(style = "background-color: #e8f5e9; border-left: 4px solid #28a745; padding: 10px; margin-bottom: 10px; border-radius: 4px;",
+                            tags$div(style = "font-weight: bold; font-size: 13px; color: #28a745; margin-bottom: 3px;",
+                              icon("table"), " Muestra Final (Fase 4)"),
+                            tags$div(style = "font-size: 11px; color: #666;",
+                              "✅ Ya contiene coordenadas, códigos de grilla, celda, etc.")
+                          ),
+                          fileInput("archivo_muestra_final", "Seleccionar Excel de muestra final:",
+                                    accept = c(".xlsx", ".xls")),
+                          uiOutput("mapeo_columnas_muestra_final_ui")
                         ),
                         
                         tags$hr(),
@@ -457,6 +586,59 @@ ui <- navbarPage(
                                  DTOutput("tabla_muestra_enriquecida")
                                )
                       ),
+                      tabPanel("🔍 Diagnóstico de Match",
+                               conditionalPanel(
+                                 condition = "output.diagnostico_match_disponible",
+                                 h3("Diagnóstico de Match entre Archivos", class = "fade-in"),
+                                 div(class = "alert alert-info",
+                                   icon("info-circle"),
+                                   strong(" Esta sección muestra el diagnóstico del matching entre archivos."),
+                                   p("• Caso 1: Match Lab-Coordenadas + Match Espacial (puntos dentro de grillas)", style = "margin: 5px 0 0 0; font-size: 0.9em;"),
+                                   p("• Caso 2: Match Muestra-Laboratorio (identificación de puntos sin resultados)", style = "margin: 0; font-size: 0.9em;")
+                                 ),
+                                 div(class = "card fade-in",
+                                   h4("Resumen del Match"),
+                                   verbatimTextOutput("resumen_diagnostico_match"),
+                                   tags$br(),
+                                   downloadButton("descargar_diagnostico_match_btn", 
+                                                 "Descargar Reporte Completo (.txt)", 
+                                                 class = "btn-warning")
+                                 ),
+                                 tags$br(),
+                                 div(class = "card fade-in",
+                                   h4("⚠️ Puntos Perdidos (No aparecen en análisis)"),
+                                   DTOutput("tabla_puntos_perdidos")
+                                 ),
+                                 tags$br(),
+                                 fluidRow(
+                                   column(width = 6,
+                                     div(class = "card fade-in",
+                                       h4("Puntos solo en Muestra Final"),
+                                       p("Estos puntos están en tu archivo de Fase 4 pero NO en resultados de laboratorio:", 
+                                         style = "color: #856404; background-color: #fff3cd; padding: 8px; border-radius: 4px;"),
+                                       verbatimTextOutput("lista_puntos_solo_muestra")
+                                     )
+                                   ),
+                                   column(width = 6,
+                                     div(class = "card fade-in",
+                                       h4("Puntos solo en Resultados Lab"),
+                                       p("Estos puntos están en laboratorio pero NO en muestra final (puede ser normal):", 
+                                         style = "color: #004085; background-color: #cce5ff; padding: 8px; border-radius: 4px;"),
+                                       verbatimTextOutput("lista_puntos_solo_lab")
+                                     )
+                                   )
+                                 )
+                               ),
+                               conditionalPanel(
+                                 condition = "!output.diagnostico_match_disponible",
+                                 div(class = "alert alert-secondary",
+                                   icon("info-circle"),
+                                   strong(" Diagnóstico no disponible"),
+                                   p("El diagnóstico de match estará disponible después de cargar y unificar los datos.", style = "margin-top: 10px;"),
+                                   p("Funciona tanto para Caso 1 (Matching Espacial) como para Caso 2 (Matching por Códigos).")
+                                 )
+                               )
+                      ),
                       tabPanel("Análisis Nivel Grilla", 
                                h3("Puntos de Muestreo Contaminados", class = "fade-in"),
                                div(class = "card fade-in",
@@ -483,6 +665,57 @@ ui <- navbarPage(
                                             downloadButton("descargar_todas_grillas_btn", 
                                                           "Descargar Todas las Grillas (.xlsx)", 
                                                           class = "btn-info btn-sm")
+                                          )
+                                 ),
+                                 tabPanel("👻 Puntos Huérfanos",
+                                          tags$br(),
+                                          conditionalPanel(
+                                            condition = "output.diagnostico_match_disponible",
+                                            div(class = "alert alert-warning",
+                                              icon("exclamation-triangle"),
+                                              strong(" PUNTOS HUÉRFANOS: "),
+                                              "Estos puntos están en tu Muestra Final (Fase 4) pero NO tienen resultados de laboratorio. ",
+                                              strong("NO aparecen en las tablas anteriores.")
+                                            ),
+                                            div(class = "card fade-in",
+                                              h4("Resumen de Puntos Huérfanos"),
+                                              verbatimTextOutput("resumen_puntos_huerfanos"),
+                                              tags$br(),
+                                              p(strong("💡 Posibles causas:"), style = "margin-bottom: 5px;"),
+                                              tags$ul(
+                                                tags$li("Diferencias en formato de códigos (espacios, caracteres especiales)"),
+                                                tags$li("Muestras no enviadas o no analizadas en laboratorio"),
+                                                tags$li("Errores de transcripción en códigos de punto"),
+                                                tags$li("Muestras aún en proceso de análisis")
+                                              )
+                                            ),
+                                            tags$br(),
+                                            div(class = "card fade-in",
+                                              h4("Tabla Detallada de Puntos Huérfanos"),
+                                              DTOutput("tabla_puntos_huerfanos"),
+                                              tags$br(),
+                                              fluidRow(
+                                                column(width = 6,
+                                                       downloadButton("descargar_puntos_huerfanos_excel_btn", 
+                                                                     "📥 Descargar Excel (.xlsx)", 
+                                                                     class = "btn-warning btn-sm")),
+                                                column(width = 6,
+                                                       downloadButton("descargar_puntos_huerfanos_txt_btn", 
+                                                                     "📄 Descargar Reporte (.txt)", 
+                                                                     class = "btn-secondary btn-sm"))
+                                              )
+                                            )
+                                          ),
+                                          conditionalPanel(
+                                            condition = "!output.diagnostico_match_disponible",
+                                            div(class = "alert alert-success",
+                                              icon("check-circle"),
+                                              strong(" ✅ Sin puntos huérfanos"),
+                                              p("Todos los puntos de la muestra final tienen resultados de laboratorio.", 
+                                                style = "margin-top: 10px; margin-bottom: 0;"),
+                                              p("O bien, estás usando el Caso 1 donde este diagnóstico no aplica.", 
+                                                style = "margin-top: 5px; margin-bottom: 0;")
+                                            )
                                           )
                                  )
                                )
@@ -554,32 +787,105 @@ ui <- navbarPage(
                                  verbatimTextOutput("estado_vertices")
                                ),
                                tags$br(),
-                               fluidRow(
-                                 column(width = 6,
-                                        div(class = "card fade-in",
-                                          h4("Vértices de Grillas Contaminadas"),
-                                          DTOutput("tabla_vertices_grillas"),
+                               tabsetPanel(
+                                 id = "tabset_vertices",
+                                 
+                                 # Sub-pestaña 1: Análisis por separado
+                                 tabPanel("📊 Análisis por separado",
                                           tags$br(),
-                                          downloadButton("descargar_vertices_grillas_btn", 
-                                                        "Descargar Vértices Grillas (.xlsx)", 
-                                                        class = "btn-primary btn-sm")
-                                        )),
-                                 column(width = 6,
-                                        div(class = "card fade-in",
-                                          h4("Vértices de Celdas Contaminadas"),
-                                          DTOutput("tabla_vertices_celdas"),
-                                          tags$br(),
+                                          p("Esta vista muestra todos los vértices de grillas y celdas contaminadas sin aplicar exclusiones jerárquicas."),
                                           fluidRow(
                                             column(width = 6,
-                                                   downloadButton("descargar_vertices_celdas_tph_btn", 
-                                                                 "Descargar Vértices TPH (.xlsx)", 
-                                                                 class = "btn-primary btn-sm")),
+                                                   div(class = "card fade-in",
+                                                     h4("Vértices de Grillas Contaminadas"),
+                                                     DTOutput("tabla_vertices_grillas"),
+                                                     tags$br(),
+                                                     downloadButton("descargar_vertices_grillas_btn", 
+                                                                   "Descargar Vértices Grillas (.xlsx)", 
+                                                                   class = "btn-primary btn-sm")
+                                                   )),
                                             column(width = 6,
-                                                   downloadButton("descargar_vertices_celdas_prop_btn", 
-                                                                 "Descargar Vértices Prop (.xlsx)", 
-                                                                 class = "btn-primary btn-sm"))
+                                                   div(class = "card fade-in",
+                                                     h4("Vértices de Celdas Contaminadas"),
+                                                     DTOutput("tabla_vertices_celdas"),
+                                                     tags$br(),
+                                                     fluidRow(
+                                                       column(width = 6,
+                                                              downloadButton("descargar_vertices_celdas_tph_btn", 
+                                                                            "Descargar Vértices TPH (.xlsx)", 
+                                                                            class = "btn-primary btn-sm")),
+                                                       column(width = 6,
+                                                              downloadButton("descargar_vertices_celdas_prop_btn", 
+                                                                            "Descargar Vértices Prop (.xlsx)", 
+                                                                            class = "btn-primary btn-sm"))
+                                                     )
+                                                   ))
                                           )
-                                        ))
+                                 ),
+                                 
+                                 # Sub-pestaña 2: Análisis unificado
+                                 tabPanel("🎯 Análisis unificado excluyendo sobreposición",
+                                          tags$br(),
+                                          div(class = "alert alert-info",
+                                            h5("ℹ️ Lógica de Exclusión Jerárquica", style = "margin-top: 0;"),
+                                            tags$ul(
+                                              tags$li(HTML("<strong>Nivel 1 - Locaciones completas:</strong> Si una locación está contaminada, NO se muestran sus celdas ni grillas individuales.")),
+                                              tags$li(HTML("<strong>Nivel 2 - Celdas completas:</strong> Si una celda está contaminada (y su locación NO lo está), NO se muestran sus grillas individuales.")),
+                                              tags$li(HTML("<strong>Nivel 3 - Grillas individuales:</strong> Solo se muestran grillas que NO pertenecen a celdas ni locaciones contaminadas completas."))
+                                            ),
+                                            p(HTML("<strong>Resultado:</strong> Evita duplicación al remediar. No tiene sentido acusar grillas individuales de una celda que ya se va a remediar completa."))
+                                          ),
+                                          
+                                          # Resumen ejecutivo de elementos a remediar
+                                          div(class = "alert alert-success",
+                                            h5("📊 Resumen de Elementos Sujetos a Remediación", style = "margin-top: 0; font-weight: bold;"),
+                                            uiOutput("resumen_unificado_conteos"),
+                                            tags$br(),
+                                            fluidRow(
+                                              column(width = 4,
+                                                     div(class = "well well-sm",
+                                                       h6("📍 Grillas Contaminadas", style = "color: #d9534f; font-weight: bold;"),
+                                                       uiOutput("lista_grillas_unificado")
+                                                     )),
+                                              column(width = 4,
+                                                     div(class = "well well-sm",
+                                                       h6("🔲 Celdas Contaminadas", style = "color: #f0ad4e; font-weight: bold;"),
+                                                       uiOutput("lista_celdas_unificado")
+                                                     )),
+                                              column(width = 4,
+                                                     div(class = "well well-sm",
+                                                       h6("🏢 Locaciones Contaminadas", style = "color: #5bc0de; font-weight: bold;"),
+                                                       uiOutput("lista_locaciones_contaminadas")
+                                                     ))
+                                            )
+                                          ),
+                                          tags$br(),
+                                          
+                                          fluidRow(
+                                            column(width = 6,
+                                                   div(class = "card fade-in",
+                                                     h4("Vértices de Grillas Contaminadas (Filtradas)"),
+                                                     p("Solo grillas que NO pertenecen a celdas o locaciones contaminadas", 
+                                                       style = "font-size: 0.9em; color: #666;"),
+                                                     DTOutput("tabla_vertices_grillas_unificado"),
+                                                     tags$br(),
+                                                     downloadButton("descargar_vertices_grillas_unificado_btn", 
+                                                                   "Descargar Vértices Grillas Unificado (.xlsx)", 
+                                                                   class = "btn-success btn-sm")
+                                                   )),
+                                            column(width = 6,
+                                                   div(class = "card fade-in",
+                                                     h4("Vértices de Celdas Contaminadas (Filtradas)"),
+                                                     p("Solo celdas que NO pertenecen a locaciones contaminadas", 
+                                                       style = "font-size: 0.9em; color: #666;"),
+                                                     DTOutput("tabla_vertices_celdas_unificado"),
+                                                     tags$br(),
+                                                     downloadButton("descargar_vertices_celdas_unificado_btn", 
+                                                                   "Descargar Vértices Celdas Unificado (.xlsx)", 
+                                                                   class = "btn-success btn-sm")
+                                                   ))
+                                          )
+                                 )
                                )
                       ),
                       tabPanel("Resumen final y shapefiles", 
@@ -606,14 +912,26 @@ ui <- navbarPage(
                                tags$br(),
                                div(class = "card fade-in",
                                  h4("Exportar Reporte Completo"),
+                                 p("Incluye todas las grillas (contaminadas y no contaminadas), promedios de celdas y locaciones"),
                                  downloadButton("descargar_reporte_completo_btn", 
                                                "Descargar Reporte Completo (.xlsx)", 
                                                class = "btn-success btn-block")
                                ),
                                tags$br(),
                                div(class = "card fade-in",
-                                 h4("Exportar Shapefiles Contaminados"),
-                                 p("Descarga shapefiles de grillas y celdas con columna CRITERIO_CONTAMINACION"),
+                                 h4("Exportar Reporte Solo Contaminadas"),
+                                 p("Excel filtrado con solo grillas, celdas y locaciones contaminadas según criterio_contaminacion"),
+                                 downloadButton("descargar_reporte_solo_contaminadas_btn", 
+                                               "Descargar Reporte Solo Contaminadas (.xlsx)", 
+                                               class = "btn-danger btn-block")
+                               ),
+                               tags$br(),
+                               div(class = "card fade-in",
+                                 h4("Exportar Shapefiles Contaminados (Con Exclusión Jerárquica)"),
+                                 p("Shapefiles con lógica jerárquica aplicada: solo grillas/celdas que NO pertenecen a niveles superiores contaminados"),
+                                 p(style = "font-size: 0.9em; color: #666;", 
+                                   HTML("<strong>Estructura:</strong> ZIP principal contiene 2 ZIPs separados (grillas y celdas)<br>
+                                        <strong>Columnas incluidas:</strong> CRITERIO (tipo de contaminación), TIPO_ANALISIS (Unificado)")),
                                  downloadButton("descargar_shapefiles_contaminados_btn", 
                                                "Descargar Shapefiles Contaminados (.zip)", 
                                                class = "btn-warning btn-block")
@@ -695,6 +1013,13 @@ server <- function(input, output, session) {
   celdas_con_pocas_grillas <- reactiveVal(NULL)
   celdas_solo_en_marco_celdas <- reactiveVal(NULL)
   celdas_solo_en_marco_grillas <- reactiveVal(NULL)
+  
+  # Variables reactivas - Fase 2C (Verificación Espacial de Marcos Shapefile)
+  shp_grillas_verif <- reactiveVal(NULL)
+  shp_celdas_verif <- reactiveVal(NULL)
+  centroides_grillas_verif <- reactiveVal(NULL)
+  resultado_grillas_fuera <- reactiveVal(NULL)
+  resultado_celdas_mal_asignadas <- reactiveVal(NULL)
   
   # Variables reactivas - Fase 4 (Pozos de referencia)
   pozos_referencia <- reactiveVal(NULL)
@@ -1515,6 +1840,527 @@ server <- function(input, output, session) {
       }
     )
   })
+  
+  # ============================================================================ #
+  # FASE 2C: VERIFICACIÓN ESPACIAL DE MARCOS SHAPEFILE                         #
+  # ============================================================================ #
+  
+  # Handler para ejecutar verificación espacial
+  observeEvent(input$verificar_espacial_btn, {
+    tryCatch({
+      # Validar que ambos archivos estén cargados
+      if (is.null(input$archivo_shp_grillas_verif)) {
+        showNotification("⚠️ Debe cargar el shapefile de GRILLAS", type = "error", duration = 5)
+        return(NULL)
+      }
+      
+      if (is.null(input$archivo_shp_celdas_verif)) {
+        showNotification("⚠️ Debe cargar el shapefile de CELDAS", type = "error", duration = 5)
+        return(NULL)
+      }
+      
+      showNotification("🔄 Cargando y procesando shapefiles...", type = "message", duration = 3)
+      
+      # ==== CARGAR SHAPEFILE DE GRILLAS ====
+      cat("\n=== Cargando Shapefile de Grillas ===\n")
+      
+      # Crear subdirectorio único para descompresión
+      temp_base <- tempdir()
+      temp_dir_grillas <- file.path(temp_base, paste0("grillas_verif_", format(Sys.time(), "%Y%m%d_%H%M%S")))
+      dir.create(temp_dir_grillas, showWarnings = FALSE, recursive = TRUE)
+      
+      zip_path_grillas <- input$archivo_shp_grillas_verif$datapath
+      
+      cat("→ Ruta del ZIP:", zip_path_grillas, "\n")
+      cat("→ Directorio de extracción:", temp_dir_grillas, "\n")
+      
+      # Validar que el archivo existe y es legible
+      if (!file.exists(zip_path_grillas)) {
+        showNotification("❌ El archivo ZIP de grillas no existe", type = "error", duration = 5)
+        return(NULL)
+      }
+      
+      # Descomprimir con manejo de errores
+      unzip_result <- tryCatch({
+        unzip(zip_path_grillas, exdir = temp_dir_grillas)
+      }, error = function(e) {
+        cat("❌ Error al descomprimir:", conditionMessage(e), "\n")
+        return(NULL)
+      }, warning = function(w) {
+        cat("⚠️ Advertencia al descomprimir:", conditionMessage(w), "\n")
+        return(NULL)
+      })
+      
+      if (is.null(unzip_result) || length(unzip_result) == 0) {
+        showNotification("❌ No se pudo descomprimir el ZIP de grillas. Verifique que sea un archivo ZIP válido.", 
+                        type = "error", duration = 8)
+        return(NULL)
+      }
+      
+      cat("→ Archivos extraídos:", length(unzip_result), "\n")
+      
+      # Buscar archivo .shp recursivamente
+      shp_files_grillas <- list.files(temp_dir_grillas, pattern = "\\.shp$", 
+                                       full.names = TRUE, recursive = TRUE, 
+                                       ignore.case = TRUE)
+      
+      cat("→ Archivos .shp encontrados:", length(shp_files_grillas), "\n")
+      if (length(shp_files_grillas) > 0) {
+        cat("→ Primer shapefile:", shp_files_grillas[1], "\n")
+      }
+      
+      if (length(shp_files_grillas) == 0) {
+        # Listar todos los archivos para diagnóstico
+        todos_archivos <- list.files(temp_dir_grillas, full.names = TRUE, recursive = TRUE)
+        cat("⚠️ Archivos encontrados en el ZIP:\n")
+        print(todos_archivos)
+        
+        showNotification("❌ No se encontró archivo .shp en el ZIP de grillas. Verifique la estructura del ZIP.", 
+                        type = "error", duration = 8)
+        return(NULL)
+      }
+      
+      # Leer shapefile de grillas
+      shp_grillas_raw <- st_read(shp_files_grillas[1], quiet = FALSE)
+      
+      # Estandarizar nombres de columnas a MAYÚSCULAS (EXCEPTO la geometría)
+      # IMPORTANTE: Usar el mismo patrón que Fase 5 para no romper la referencia sf
+      geom_col_grillas <- attr(shp_grillas_raw, "sf_column")
+      col_names_grillas <- names(shp_grillas_raw)
+      col_names_grillas_upper <- toupper(col_names_grillas)
+      # Restaurar el nombre original de la columna de geometría
+      col_names_grillas_upper[col_names_grillas == geom_col_grillas] <- geom_col_grillas
+      names(shp_grillas_raw) <- col_names_grillas_upper
+      
+      # Detectar columna de grilla
+      col_grilla <- NULL
+      if ("GRILLA" %in% names(shp_grillas_raw)) {
+        col_grilla <- "GRILLA"
+      } else if ("COD_GRILLA" %in% names(shp_grillas_raw)) {
+        col_grilla <- "COD_GRILLA"
+      } else {
+        showNotification("❌ No se encontró columna GRILLA o COD_GRILLA en el shapefile", 
+                        type = "error", duration = 5)
+        return(NULL)
+      }
+      
+      cat("✓ Columna de grilla detectada:", col_grilla, "\n")
+      
+      # Detectar columna de celda (opcional)
+      col_celda_grillas <- NULL
+      if ("CELDA" %in% names(shp_grillas_raw)) {
+        col_celda_grillas <- "CELDA"
+      } else if ("COD_CELDA" %in% names(shp_grillas_raw)) {
+        col_celda_grillas <- "COD_CELDA"
+      }
+      
+      if (!is.null(col_celda_grillas)) {
+        cat("✓ Columna de celda detectada en grillas:", col_celda_grillas, "\n")
+      } else {
+        cat("ℹ️ No se encontró columna de celda en grillas (CELDA o COD_CELDA)\n")
+      }
+      
+      shp_grillas_verif(shp_grillas_raw)
+      
+      # ==== CARGAR SHAPEFILE DE CELDAS ====
+      cat("\n=== Cargando Shapefile de Celdas ===\n")
+      
+      # Crear subdirectorio único para descompresión
+      temp_dir_celdas <- file.path(temp_base, paste0("celdas_verif_", format(Sys.time(), "%Y%m%d_%H%M%S")))
+      dir.create(temp_dir_celdas, showWarnings = FALSE, recursive = TRUE)
+      
+      zip_path_celdas <- input$archivo_shp_celdas_verif$datapath
+      
+      cat("→ Ruta del ZIP:", zip_path_celdas, "\n")
+      cat("→ Directorio de extracción:", temp_dir_celdas, "\n")
+      
+      # Validar que el archivo existe y es legible
+      if (!file.exists(zip_path_celdas)) {
+        showNotification("❌ El archivo ZIP de celdas no existe", type = "error", duration = 5)
+        return(NULL)
+      }
+      
+      # Descomprimir con manejo de errores
+      unzip_result_celdas <- tryCatch({
+        unzip(zip_path_celdas, exdir = temp_dir_celdas)
+      }, error = function(e) {
+        cat("❌ Error al descomprimir:", conditionMessage(e), "\n")
+        return(NULL)
+      }, warning = function(w) {
+        cat("⚠️ Advertencia al descomprimir:", conditionMessage(w), "\n")
+        return(NULL)
+      })
+      
+      if (is.null(unzip_result_celdas) || length(unzip_result_celdas) == 0) {
+        showNotification("❌ No se pudo descomprimir el ZIP de celdas. Verifique que sea un archivo ZIP válido.", 
+                        type = "error", duration = 8)
+        return(NULL)
+      }
+      
+      cat("→ Archivos extraídos:", length(unzip_result_celdas), "\n")
+      
+      # Buscar archivo .shp recursivamente
+      shp_files_celdas <- list.files(temp_dir_celdas, pattern = "\\.shp$", 
+                                       full.names = TRUE, recursive = TRUE, 
+                                       ignore.case = TRUE)
+      
+      cat("→ Archivos .shp encontrados:", length(shp_files_celdas), "\n")
+      if (length(shp_files_celdas) > 0) {
+        cat("→ Primer shapefile:", shp_files_celdas[1], "\n")
+      }
+      
+      if (length(shp_files_celdas) == 0) {
+        # Listar todos los archivos para diagnóstico
+        todos_archivos_celdas <- list.files(temp_dir_celdas, full.names = TRUE, recursive = TRUE)
+        cat("⚠️ Archivos encontrados en el ZIP:\n")
+        print(todos_archivos_celdas)
+        
+        showNotification("❌ No se encontró archivo .shp en el ZIP de celdas. Verifique la estructura del ZIP.", 
+                        type = "error", duration = 8)
+        return(NULL)
+      }
+      
+      # Leer shapefile de celdas
+      shp_celdas_raw <- st_read(shp_files_celdas[1], quiet = FALSE)
+      
+      # Estandarizar nombres de columnas a MAYÚSCULAS (EXCEPTO la geometría)
+      # IMPORTANTE: Usar el mismo patrón que Fase 5 para no romper la referencia sf
+      geom_col_celdas <- attr(shp_celdas_raw, "sf_column")
+      col_names_celdas <- names(shp_celdas_raw)
+      col_names_celdas_upper <- toupper(col_names_celdas)
+      # Restaurar el nombre original de la columna de geometría
+      col_names_celdas_upper[col_names_celdas == geom_col_celdas] <- geom_col_celdas
+      names(shp_celdas_raw) <- col_names_celdas_upper
+      
+      # Detectar columna de celda
+      col_celda_celdas <- NULL
+      if ("CELDA" %in% names(shp_celdas_raw)) {
+        col_celda_celdas <- "CELDA"
+      } else if ("COD_CELDA" %in% names(shp_celdas_raw)) {
+        col_celda_celdas <- "COD_CELDA"
+      } else {
+        showNotification("❌ No se encontró columna CELDA o COD_CELDA en el shapefile de celdas", 
+                        type = "error", duration = 5)
+        return(NULL)
+      }
+      
+      cat("✓ Columna de celda detectada:", col_celda_celdas, "\n")
+      
+      shp_celdas_verif(shp_celdas_raw)
+      
+      showNotification("✓ Shapefiles cargados correctamente", type = "message", duration = 3)
+      
+      # ==== ANÁLISIS 1: GENERAR CENTROIDES ====
+      showNotification("🔄 Generando centroides de grillas...", type = "message", duration = 3)
+      
+      centroides <- generar_centroides_grillas(shp_grillas_raw, col_grilla = col_grilla)
+      centroides_grillas_verif(centroides)
+      
+      # ==== ANÁLISIS 2: IDENTIFICAR GRILLAS FUERA DE CELDAS ====
+      showNotification("🔄 Identificando grillas fuera de celdas...", type = "message", duration = 3)
+      
+      resultado_fuera <- identificar_grillas_fuera_celdas(
+        centroides, 
+        shp_celdas_raw, 
+        col_celda = col_celda_celdas
+      )
+      
+      resultado_grillas_fuera(resultado_fuera)
+      
+      # ==== ANÁLISIS 3: VERIFICAR CÓDIGOS DE CELDA ====
+      if (!is.null(col_celda_grillas)) {
+        showNotification("🔄 Verificando asignación de códigos de celda...", type = "message", duration = 3)
+        
+        resultado_mal_asignadas <- identificar_celdas_mal_asignadas(
+          shp_grillas_raw,
+          shp_celdas_raw,
+          col_grilla = col_grilla,
+          col_celda_grillas = col_celda_grillas,
+          col_celda_celdas = col_celda_celdas
+        )
+        
+        resultado_celdas_mal_asignadas(resultado_mal_asignadas)
+        
+        # Notificar si hay celdas duplicadas detectadas
+        if (!is.null(resultado_mal_asignadas$tiene_duplicados) && resultado_mal_asignadas$tiene_duplicados) {
+          n_dup <- resultado_mal_asignadas$info_duplicados$n_duplicados
+          showNotification(
+            paste0("⚠️ CELDAS DUPLICADAS DETECTADAS: ", n_dup, " celda(s) apilada(s). Revise la consola para detalles."),
+            type = "warning",
+            duration = 10
+          )
+        }
+      } else {
+        # No se puede hacer verificación
+        resultado_celdas_mal_asignadas(list(
+          mal_asignadas = NULL,
+          verificacion_posible = FALSE
+        ))
+      }
+      
+      # Notificación final
+      msg_final <- "✅ Verificación espacial completada"
+      if (resultado_fuera$n_fuera > 0) {
+        msg_final <- paste0(msg_final, "\n⚠️ Se encontraron ", resultado_fuera$n_fuera, 
+                           " grillas fuera de celdas")
+      }
+      
+      showNotification(msg_final, type = "message", duration = 5)
+      
+    }, error = function(e) {
+      cat("\n❌ ERROR en verificación espacial:\n")
+      print(e)
+      showNotification(
+        paste0("❌ Error en verificación espacial: ", conditionMessage(e)),
+        type = "error",
+        duration = 10
+      )
+      registrar_error(e, "Verificación espacial de marcos shapefile")
+    })
+  })
+  
+  # Outputs de visualización - Grillas fuera de celdas
+  output$resumen_grillas_fuera <- renderUI({
+    resultado <- resultado_grillas_fuera()
+    req(resultado)
+    
+    if (resultado$n_fuera == 0) {
+      tags$div(
+        style = "padding: 15px; background-color: #d4edda; border-left: 5px solid #28a745;",
+        h5(style = "color: #155724; margin: 0;", "✅ Verificación Exitosa"),
+        p(style = "color: #155724; margin-top: 10px; margin-bottom: 0;",
+          sprintf("Todas las %d grillas tienen sus centroides DENTRO de celdas.", resultado$n_total))
+      )
+    } else {
+      tags$div(
+        style = "padding: 15px; background-color: #fff3cd; border-left: 5px solid #ffc107;",
+        tags$table(style = "width: 100%; border-collapse: collapse;",
+          tags$tr(
+            tags$td(style = "padding: 5px; font-weight: bold;", "Total de grillas:"),
+            tags$td(style = "padding: 5px; text-align: right;", resultado$n_total)
+          ),
+          tags$tr(
+            tags$td(style = "padding: 5px; font-weight: bold; color: #856404;", "Grillas FUERA de celdas:"),
+            tags$td(style = "padding: 5px; text-align: right; color: #856404; font-weight: bold; font-size: 18px;",
+                   sprintf("%d (%.1f%%)", resultado$n_fuera, resultado$pct_fuera))
+          ),
+          tags$tr(
+            tags$td(style = "padding: 5px; font-weight: bold; color: #28a745;", "Grillas DENTRO de celdas:"),
+            tags$td(style = "padding: 5px; text-align: right; color: #28a745;",
+                   sprintf("%d (%.1f%%)", resultado$n_total - resultado$n_fuera, 100 - resultado$pct_fuera))
+          )
+        )
+      )
+    }
+  })
+  
+  output$tabla_grillas_fuera <- renderDT({
+    resultado <- resultado_grillas_fuera()
+    req(resultado)
+    
+    if (resultado$n_fuera == 0) {
+      data.frame(
+        Mensaje = "✅ No hay grillas con problemas. Todas están dentro de celdas."
+      )
+    } else {
+      grillas_fuera <- resultado$grillas_fuera
+      datatable(
+        grillas_fuera,
+        options = list(
+          pageLength = 15,
+          scrollX = TRUE,
+          dom = 'Bfrtip',
+          buttons = c('copy', 'csv', 'excel')
+        ),
+        rownames = FALSE,
+        class = 'cell-border stripe'
+      ) %>%
+        formatStyle(
+          'COD_GRILLA',
+          backgroundColor = '#fff3cd',
+          fontWeight = 'bold'
+        )
+    }
+  })
+  
+  # Outputs de visualización - Celdas mal asignadas
+  output$resumen_celdas_mal_asignadas <- renderUI({
+    resultado <- resultado_celdas_mal_asignadas()
+    req(resultado)
+    
+    if (!resultado$verificacion_posible) {
+      return(tags$div(
+        style = "padding: 15px; background-color: #e7f3ff; border-left: 5px solid #2196f3;",
+        h5(style = "color: #004085; margin: 0;", "ℹ️ Verificación No Disponible"),
+        p(style = "color: #004085; margin-top: 10px; margin-bottom: 0;",
+          "El shapefile de grillas no contiene columna CELDA o COD_CELDA. 
+          No es posible verificar la asignación de códigos.")
+      ))
+    }
+    
+    if (resultado$n_mal_asignadas == 0) {
+      tags$div(
+        style = "padding: 15px; background-color: #d4edda; border-left: 5px solid #28a745;",
+        h5(style = "color: #155724; margin: 0;", "✅ Verificación Exitosa"),
+        p(style = "color: #155724; margin-top: 10px; margin-bottom: 0;",
+          sprintf("Las %d grillas verificadas tienen códigos de celda CORRECTOS.", resultado$n_total))
+      )
+    } else {
+      tags$div(
+        style = "padding: 15px; background-color: #f8d7da; border-left: 5px solid #dc3545;",
+        tags$table(style = "width: 100%; border-collapse: collapse;",
+          tags$tr(
+            tags$td(style = "padding: 5px; font-weight: bold;", "Total de grillas verificadas:"),
+            tags$td(style = "padding: 5px; text-align: right;", resultado$n_total)
+          ),
+          tags$tr(
+            tags$td(style = "padding: 5px; font-weight: bold; color: #721c24;", "Grillas con código INCORRECTO:"),
+            tags$td(style = "padding: 5px; text-align: right; color: #721c24; font-weight: bold; font-size: 18px;",
+                   sprintf("%d (%.1f%%)", resultado$n_mal_asignadas, resultado$pct_mal))
+          ),
+          tags$tr(
+            tags$td(style = "padding: 5px; font-weight: bold; color: #28a745;", "Grillas con código CORRECTO:"),
+            tags$td(style = "padding: 5px; text-align: right; color: #28a745;",
+                   sprintf("%d (%.1f%%)", resultado$n_total - resultado$n_mal_asignadas, 100 - resultado$pct_mal))
+          )
+        )
+      )
+    }
+  })
+  
+  output$tabla_celdas_mal_asignadas <- renderDT({
+    resultado <- resultado_celdas_mal_asignadas()
+    req(resultado)
+    
+    if (!resultado$verificacion_posible) {
+      return(datatable(
+        data.frame(
+          Mensaje = "El shapefile no contiene columna de celda. Verificación no disponible."
+        ),
+        options = list(dom = 't'),
+        rownames = FALSE
+      ))
+    }
+    
+    if (resultado$n_mal_asignadas == 0) {
+      return(datatable(
+        data.frame(
+          Mensaje = "✅ Todas las grillas tienen códigos de celda correctos."
+        ),
+        options = list(dom = 't'),
+        rownames = FALSE
+      ))
+    }
+    
+    mal_asignadas <- resultado$mal_asignadas
+    datatable(
+      mal_asignadas,
+      options = list(
+        pageLength = 15,
+        scrollX = TRUE,
+        dom = 'Bfrtip',
+        buttons = c('copy', 'csv', 'excel')
+      ),
+      rownames = FALSE,
+      class = 'cell-border stripe'
+    ) %>%
+      formatStyle(
+        'PROBLEMA',
+        backgroundColor = styleEqual(
+          c('Centroide fuera de celdas', 'Código de celda incorrecto'),
+          c('#fff3cd', '#f8d7da')
+        ),
+        fontWeight = 'bold'
+      ) %>%
+      formatStyle(
+        'CELDA_ASIGNADA',
+        backgroundColor = '#ffe6e6'
+      ) %>%
+      formatStyle(
+        'CELDA_REAL',
+        backgroundColor = '#e6ffe6'
+      )
+  })
+  
+  # Handler de descarga - Marco de grillas limpio
+  output$descargar_marco_grillas_limpio_btn <- downloadHandler(
+    filename = function() {
+      paste0("Marco_Grillas_LIMPIO_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".zip")
+    },
+    content = function(file) {
+      tryCatch({
+        resultado_fuera <- resultado_grillas_fuera()
+        req(resultado_fuera)
+        
+        if (resultado_fuera$n_fuera == 0) {
+          showNotification(
+            "✅ No hay grillas para eliminar. El marco está limpio.",
+            type = "message",
+            duration = 5
+          )
+          # Exportar el shapefile original sin cambios
+          shp_original <- shp_grillas_verif()
+        } else {
+          # Detectar columna de grilla
+          shp_original <- shp_grillas_verif()
+          col_grilla <- NULL
+          if ("GRILLA" %in% names(shp_original)) {
+            col_grilla <- "GRILLA"
+          } else if ("COD_GRILLA" %in% names(shp_original)) {
+            col_grilla <- "COD_GRILLA"
+          }
+          
+          # Limpiar shapefile
+          codigos_eliminar <- resultado_fuera$grillas_fuera$COD_GRILLA
+          shp_limpio <- limpiar_shapefile_grillas(shp_original, codigos_eliminar, col_grilla = col_grilla)
+          shp_original <- shp_limpio
+        }
+        
+        # Convertir a 2D si es necesario
+        if (any(st_is(shp_original, "3D"))) {
+          shp_original <- st_zm(shp_original, drop = TRUE, what = "ZM")
+        }
+        
+        # Validar geometrías
+        if (any(!st_is_valid(shp_original))) {
+          shp_original <- st_make_valid(shp_original)
+        }
+        
+        # Crear directorio temporal
+        temp_dir <- tempdir()
+        temp_subdir <- file.path(temp_dir, paste0("grillas_limpio_", format(Sys.time(), "%Y%m%d_%H%M%S")))
+        dir.create(temp_subdir, showWarnings = FALSE, recursive = TRUE)
+        
+        # Nombre base para archivos
+        base_name <- "Marco_Grillas_LIMPIO"
+        shp_path <- file.path(temp_subdir, paste0(base_name, ".shp"))
+        
+        # Escribir shapefile
+        st_write(shp_original, shp_path, delete_dsn = TRUE, quiet = TRUE)
+        
+        # Crear ZIP
+        shp_files <- list.files(temp_subdir, pattern = base_name, full.names = TRUE)
+        zip::zip(file, files = basename(shp_files), root = temp_subdir)
+        
+        # Limpiar
+        unlink(temp_subdir, recursive = TRUE)
+        
+        msg <- sprintf("✅ Marco limpio descargado (%d grillas eliminadas, %d grillas restantes)",
+                      resultado_fuera$n_fuera,
+                      resultado_fuera$n_total - resultado_fuera$n_fuera)
+        showNotification(msg, type = "message", duration = 5)
+        
+      }, error = function(e) {
+        cat("\n❌ ERROR al generar shapefile limpio:\n")
+        print(e)
+        showNotification(
+          paste0("❌ Error al generar shapefile: ", conditionMessage(e)),
+          type = "error",
+          duration = 10
+        )
+      })
+    }
+  )
   
   # ============================================================================ #
   # FASE 3: CÁLCULO DEL TAMAÑO MUESTRAL                                        #
@@ -2362,17 +3208,265 @@ server <- function(input, output, session) {
   
   # Variables reactivas - Fase 5
   muestra_enriquecida <- reactiveVal(NULL)
+  diagnostico_enriquecimiento <- reactiveVal(NULL)  # NUEVO: captura problemas de match
   promedios_celdas_resultado <- reactiveVal(NULL)
   promedios_locaciones_resultado <- reactiveVal(NULL)
   vertices_grillas_resultado <- reactiveVal(NULL)
   vertices_celdas_tph_resultado <- reactiveVal(NULL)
   vertices_celdas_prop_resultado <- reactiveVal(NULL)
+  # Variables para análisis unificado (con exclusión jerárquica)
+  vertices_grillas_unificado <- reactiveVal(NULL)
+  vertices_celdas_unificado <- reactiveVal(NULL)
   
   # Variables reactivas para shapefiles
   shp_grillas_data <- reactiveVal(NULL)
   shp_celdas_data <- reactiveVal(NULL)
   columnas_shp_grillas <- reactiveVal(NULL)
   columnas_shp_celdas <- reactiveVal(NULL)
+  
+  # Variables reactivas para mapeo de columnas de archivos Excel
+  columnas_resultados_lab <- reactiveVal(NULL)
+  columnas_coordenadas <- reactiveVal(NULL)
+  columnas_muestra_final <- reactiveVal(NULL)
+  columnas_marco_grillas_shp_caso1 <- reactiveVal(NULL)
+  
+  # ============================================================================ #
+  # OBSERVERS PARA DETECTAR CARGA DE ARCHIVOS Y CAPTURAR COLUMNAS              #
+  # ============================================================================ #
+  
+  # Observer para archivo de resultados de laboratorio
+  observeEvent(input$archivo_resultados_lab, {
+    req(input$archivo_resultados_lab)
+    tryCatch({
+      datos <- read_excel(input$archivo_resultados_lab$datapath, n_max = 1)
+      columnas_resultados_lab(names(datos))
+    }, error = function(e) {
+      columnas_resultados_lab(NULL)
+    })
+  })
+  
+  # Observer para archivo de coordenadas (Caso 1)
+  observeEvent(input$archivo_coordenadas, {
+    req(input$archivo_coordenadas)
+    tryCatch({
+      datos <- read_excel(input$archivo_coordenadas$datapath, n_max = 1)
+      columnas_coordenadas(names(datos))
+    }, error = function(e) {
+      columnas_coordenadas(NULL)
+    })
+  })
+  
+  # Observer para archivo de muestra final (Caso 2)
+  observeEvent(input$archivo_muestra_final, {
+    req(input$archivo_muestra_final)
+    tryCatch({
+      datos <- read_excel(input$archivo_muestra_final$datapath, n_max = 1)
+      columnas_muestra_final(names(datos))
+    }, error = function(e) {
+      columnas_muestra_final(NULL)
+    })
+  })
+  
+  # Observer para shapefile de marco de grillas (Caso 1)
+  observeEvent(input$archivo_marco_grillas_shp, {
+    req(input$archivo_marco_grillas_shp)
+    tryCatch({
+      temp_dir <- file.path(tempdir(), "preview_shp", basename(tempfile()))
+      dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
+      unzip(input$archivo_marco_grillas_shp$datapath, exdir = temp_dir)
+      shp_files <- list.files(temp_dir, pattern = "\\.shp$", full.names = TRUE, recursive = TRUE)
+      
+      if (length(shp_files) > 0) {
+        shp <- st_read(shp_files[1], quiet = TRUE)
+        columnas_marco_grillas_shp_caso1(names(shp))
+      }
+    }, error = function(e) {
+      columnas_marco_grillas_shp_caso1(NULL)
+    })
+  })
+  
+  # ============================================================================ #
+  # OUTPUTS PARA MAPEO DE COLUMNAS                                             #
+  # ============================================================================ #
+  
+  # Mapeo de columnas para resultados de laboratorio
+  output$mapeo_columnas_lab_ui <- renderUI({
+    req(columnas_resultados_lab())
+    
+    cols <- columnas_resultados_lab()
+    cols_upper <- toupper(cols)
+    
+    # Detectar columnas sugeridas
+    patrones_punto <- c("PUNTO", "PUNTOS", "COD_PUNTO", "CODIGO_PUNTO", "POINT", "ID")
+    patrones_tph <- c("TPH", "HIDROCARBUROS", "HC")
+    patrones_locacion <- c("LOCACION", "UBICACION", "LOCATION", "LOC")
+    patrones_prof <- c("PROF", "PROFUNDIDAD", "DEPTH")
+    
+    col_punto_sugerida <- detectar_columna_candidata(cols, patrones_punto)
+    col_tph_sugerida <- detectar_columna_candidata(cols, patrones_tph)
+    col_locacion_sugerida <- detectar_columna_candidata(cols, patrones_locacion)
+    col_prof_sugerida <- detectar_columna_candidata(cols, patrones_prof)
+    
+    # Verificar columnas críticas
+    tiene_punto <- any(grepl("PUNTO|POINT", cols_upper))
+    tiene_tph <- any(grepl("TPH|HIDROCARB", cols_upper))
+    
+    mensaje_advertencia <- if (!tiene_punto || !tiene_tph) {
+      div(style = "background-color: #f8d7da; border: 2px solid #dc3545; padding: 8px; border-radius: 4px; margin-bottom: 8px; font-size: 11px; color: #721c24;",
+        icon("exclamation-triangle"),
+        strong(" ADVERTENCIA: "),
+        if (!tiene_punto) "No se detectó columna 'PUNTO'. " else "",
+        if (!tiene_tph) "No se detectó columna 'TPH'. " else "",
+        "Columnas: ", paste(head(cols, 5), collapse = ", "),
+        if (length(cols) > 5) "..." else ""
+      )
+    } else {
+      div(style = "background-color: #d4edda; border: 1px solid #28a745; padding: 6px; border-radius: 4px; margin-bottom: 8px; font-size: 11px;",
+        icon("check-circle"), " Columnas detectadas correctamente"
+      )
+    }
+    
+    tagList(
+      mensaje_advertencia,
+      p(strong("Mapeo de columnas:"), style = "font-size: 12px; color: #0066cc; margin-bottom: 5px;"),
+      selectInput("col_punto_lab", "Columna PUNTO:", choices = cols, selected = col_punto_sugerida),
+      selectInput("col_tph_lab", "Columna TPH:", choices = cols, selected = col_tph_sugerida),
+      selectInput("col_locacion_lab", "Columna LOCACION:", choices = cols, selected = col_locacion_sugerida),
+      selectInput("col_prof_lab", "Columna PROFUNDIDAD:", choices = cols, selected = col_prof_sugerida)
+    )
+  })
+  
+  # Mapeo de columnas para coordenadas (Caso 1)
+  output$mapeo_columnas_coords_ui <- renderUI({
+    req(columnas_coordenadas())
+    
+    cols <- columnas_coordenadas()
+    cols_upper <- toupper(cols)
+    
+    patrones_punto <- c("PUNTO", "PUNTOS", "COD_PUNTO", "POINT", "ID")
+    patrones_norte <- c("NORTE", "NORTH", "Y", "COORD_Y", "NORTHING")
+    patrones_este <- c("ESTE", "EAST", "X", "COORD_X", "EASTING")
+    patrones_altitud <- c("ALTITUD", "ALTITUDE", "ELEVACION", "ELEVATION", "Z")
+    
+    col_punto_sugerida <- detectar_columna_candidata(cols, patrones_punto)
+    col_norte_sugerida <- detectar_columna_candidata(cols, patrones_norte)
+    col_este_sugerida <- detectar_columna_candidata(cols, patrones_este)
+    col_altitud_sugerida <- detectar_columna_candidata(cols, patrones_altitud)
+    
+    tiene_coords <- any(grepl("NORTE|NORTH|Y", cols_upper)) && any(grepl("ESTE|EAST|X", cols_upper))
+    
+    mensaje_advertencia <- if (!tiene_coords) {
+      div(style = "background-color: #f8d7da; border: 2px solid #dc3545; padding: 8px; border-radius: 4px; margin-bottom: 8px; font-size: 11px; color: #721c24;",
+        icon("exclamation-triangle"),
+        strong(" ADVERTENCIA: "),
+        "No se detectaron coordenadas NORTE/ESTE. Columnas: ", paste(head(cols, 5), collapse = ", ")
+      )
+    } else {
+      div(style = "background-color: #d4edda; border: 1px solid #28a745; padding: 6px; border-radius: 4px; margin-bottom: 8px; font-size: 11px;",
+        icon("check-circle"), " Coordenadas detectadas"
+      )
+    }
+    
+    tagList(
+      mensaje_advertencia,
+      p(strong("Mapeo de columnas:"), style = "font-size: 12px; color: #ff9800; margin-bottom: 5px;"),
+      selectInput("col_punto_coords", "Columna PUNTO:", choices = cols, selected = col_punto_sugerida),
+      selectInput("col_norte_coords", "Columna NORTE:", choices = cols, selected = col_norte_sugerida),
+      selectInput("col_este_coords", "Columna ESTE:", choices = cols, selected = col_este_sugerida),
+      selectInput("col_altitud_coords", "Columna ALTITUD (opcional):", choices = c("(ninguna)", cols), selected = col_altitud_sugerida)
+    )
+  })
+  
+  # Mapeo de columnas para shapefile de marco de grillas (Caso 1)
+  output$mapeo_columnas_marco_shp_ui <- renderUI({
+    req(columnas_marco_grillas_shp_caso1())
+    
+    cols <- columnas_marco_grillas_shp_caso1()
+    cols_upper <- toupper(cols)
+    
+    patrones_locacion <- c("LOCACION", "UBICACION", "LOCATION", "LOC")
+    patrones_celda <- c("CELDA", "COD_CELDA", "CELL", "COD_UNIC")
+    patrones_grilla <- c("GRILLA", "COD_GRILLA", "GRID", "CODIGO_GRILLA")
+    patrones_area <- c("AREA", "SUPERFICIE", "Shape_Area")
+    
+    col_locacion_sugerida <- detectar_columna_candidata(cols, patrones_locacion)
+    col_celda_sugerida <- detectar_columna_candidata(cols, patrones_celda)
+    col_grilla_sugerida <- detectar_columna_candidata(cols, patrones_grilla)
+    col_area_sugerida <- detectar_columna_candidata(cols, patrones_area)
+    
+    tiene_grilla <- any(grepl("GRILL|GRID", cols_upper))
+    tiene_celda <- any(grepl("CELD|CELL", cols_upper))
+    
+    mensaje_advertencia <- if (!tiene_grilla) {
+      div(style = "background-color: #f8d7da; border: 2px solid #dc3545; padding: 8px; border-radius: 4px; margin-bottom: 8px; font-size: 11px; color: #721c24;",
+        icon("exclamation-triangle"),
+        strong(" ADVERTENCIA: "),
+        "No se detectó columna GRILLA. ¿Es el shapefile correcto? Columnas: ", paste(head(cols, 5), collapse = ", ")
+      )
+    } else {
+      div(style = "background-color: #d4edda; border: 1px solid #28a745; padding: 6px; border-radius: 4px; margin-bottom: 8px; font-size: 11px;",
+        icon("check-circle"), " Shapefile de grillas detectado"
+      )
+    }
+    
+    tagList(
+      mensaje_advertencia,
+      p(strong("Mapeo de columnas:"), style = "font-size: 12px; color: #2196f3; margin-bottom: 5px;"),
+      selectInput("col_locacion_marco_shp", "Columna LOCACION:", choices = cols, selected = col_locacion_sugerida),
+      selectInput("col_celda_marco_shp", "Columna CELDA:", choices = cols, selected = col_celda_sugerida),
+      selectInput("col_grilla_marco_shp", "Columna GRILLA:", choices = cols, selected = col_grilla_sugerida),
+      selectInput("col_area_marco_shp", "Columna AREA (opcional):", choices = c("(ninguna)", cols), selected = col_area_sugerida)
+    )
+  })
+  
+  # Mapeo de columnas para muestra final (Caso 2)
+  output$mapeo_columnas_muestra_final_ui <- renderUI({
+    req(columnas_muestra_final())
+    
+    cols <- columnas_muestra_final()
+    cols_upper <- toupper(cols)
+    
+    patrones_punto <- c("PUNTO", "COD_PUNTO", "POINT", "ID")
+    patrones_locacion <- c("LOCACION", "UBICACION", "LOCATION")
+    patrones_celda <- c("CELDA", "COD_CELDA", "CELL")
+    patrones_grilla <- c("GRILLA", "COD_GRILLA", "GRID")
+    
+    col_punto_sugerida <- detectar_columna_candidata(cols, patrones_punto)
+    col_locacion_sugerida <- detectar_columna_candidata(cols, patrones_locacion)
+    col_celda_sugerida <- detectar_columna_candidata(cols, patrones_celda)
+    col_grilla_sugerida <- detectar_columna_candidata(cols, patrones_grilla)
+    
+    tiene_punto <- any(grepl("PUNTO|POINT", cols_upper))
+    tiene_estructura <- any(grepl("GRILL|GRID|CELD|CELL", cols_upper))
+    
+    mensaje_advertencia <- if (!tiene_punto || !tiene_estructura) {
+      div(style = "background-color: #f8d7da; border: 2px solid #dc3545; padding: 8px; border-radius: 4px; margin-bottom: 8px; font-size: 11px; color: #721c24;",
+        icon("exclamation-triangle"),
+        strong(" ADVERTENCIA: "),
+        if (!tiene_punto) "No se detectó columna PUNTO. " else "",
+        if (!tiene_estructura) "No se detectó estructura de grillas/celdas. " else "",
+        "Columnas: ", paste(head(cols, 5), collapse = ", ")
+      )
+    } else {
+      div(style = "background-color: #d4edda; border: 1px solid #28a745; padding: 6px; border-radius: 4px; margin-bottom: 8px; font-size: 11px;",
+        icon("check-circle"), " Muestra final de Fase 4 detectada"
+      )
+    }
+    
+    tagList(
+      mensaje_advertencia,
+      p(strong("Mapeo de columnas:"), style = "font-size: 12px; color: #28a745; margin-bottom: 5px;"),
+      selectInput("col_punto_muestra", "Columna PUNTO:", choices = cols, selected = col_punto_sugerida),
+      selectInput("col_locacion_muestra", "Columna LOCACION:", choices = cols, selected = col_locacion_sugerida),
+      selectInput("col_celda_muestra", "Columna CELDA (opcional):", choices = c("(ninguna)", cols), selected = col_celda_sugerida),
+      selectInput("col_grilla_muestra", "Columna GRILLA (opcional):", choices = c("(ninguna)", cols), selected = col_grilla_sugerida),
+      p(em("Nota: La muestra final ya debe contener todas las columnas necesarias"), style = "font-size: 10px; color: #666;")
+    )
+  })
+  
+  # ============================================================================ #
+  # CARGAR Y UNIFICAR DATOS - MANEJA CASO 1 Y CASO 2                          #
+  # ============================================================================ #
   
   # Cargar y unificar datos - Maneja CASO 1 y CASO 2
   observeEvent(input$cargar_datos_resultados_btn, {
@@ -2383,9 +3477,28 @@ server <- function(input, output, session) {
       resultados_lab <- read_excel(input$archivo_resultados_lab$datapath)
       resultados_lab <- estandarizar_columnas(resultados_lab)
       
-      # Verificar columnas requeridas (en MAYÚSCULAS después de estandarizar)
-      if (!all(c("PUNTO", "TPH") %in% names(resultados_lab))) {
-        stop("El archivo de resultados debe contener las columnas: punto, tph (o sus variaciones)")
+      # ==== APLICAR MAPEO DE COLUMNAS DEL USUARIO (Resultados Lab) ====
+      col_punto_usuario <- toupper(input$col_punto_lab)
+      col_tph_usuario <- toupper(input$col_tph_lab)
+      col_locacion_usuario <- toupper(input$col_locacion_lab)
+      col_prof_usuario <- toupper(input$col_prof_lab)
+      
+      # Validar que las columnas seleccionadas existen
+      if (!col_punto_usuario %in% names(resultados_lab)) {
+        stop(paste("La columna seleccionada para PUNTO no existe:", col_punto_usuario))
+      }
+      if (!col_tph_usuario %in% names(resultados_lab)) {
+        stop(paste("La columna seleccionada para TPH no existe:", col_tph_usuario))
+      }
+      
+      # Renombrar columnas según mapeo
+      names(resultados_lab)[names(resultados_lab) == col_punto_usuario] <- "PUNTO"
+      names(resultados_lab)[names(resultados_lab) == col_tph_usuario] <- "TPH"
+      if (col_locacion_usuario %in% names(resultados_lab)) {
+        names(resultados_lab)[names(resultados_lab) == col_locacion_usuario] <- "LOCACION"
+      }
+      if (col_prof_usuario %in% names(resultados_lab)) {
+        names(resultados_lab)[names(resultados_lab) == col_prof_usuario] <- "PROF"
       }
       
       # Limpiar resultados de laboratorio
@@ -2398,22 +3511,146 @@ server <- function(input, output, session) {
         # CASO 1: Expedientes antiguos (3 archivos)
         showNotification("Procesando Caso 1: Expedientes antiguos...", type = "message", duration = 3)
         
-        # Cargar archivo de coordenadas (opcional)
+        # Cargar archivo de coordenadas (obligatorio para matching espacial)
         coordenadas <- NULL
         if (!is.null(input$archivo_coordenadas)) {
           coordenadas <- read_excel(input$archivo_coordenadas$datapath)
           coordenadas <- estandarizar_columnas(coordenadas)
+          
+          # ==== APLICAR MAPEO DE COLUMNAS DEL USUARIO (Coordenadas) ====
+          col_punto_coords_usuario <- toupper(input$col_punto_coords)
+          col_norte_coords_usuario <- toupper(input$col_norte_coords)
+          col_este_coords_usuario <- toupper(input$col_este_coords)
+          col_altitud_coords_usuario <- if (!is.null(input$col_altitud_coords) && input$col_altitud_coords != "(ninguna)") {
+            toupper(input$col_altitud_coords)
+          } else {
+            NULL
+          }
+          
+          # Validar que las columnas seleccionadas existen
+          if (!col_punto_coords_usuario %in% names(coordenadas)) {
+            stop(paste("La columna seleccionada para PUNTO no existe:", col_punto_coords_usuario))
+          }
+          if (!col_norte_coords_usuario %in% names(coordenadas)) {
+            stop(paste("La columna seleccionada para NORTE no existe:", col_norte_coords_usuario))
+          }
+          if (!col_este_coords_usuario %in% names(coordenadas)) {
+            stop(paste("La columna seleccionada para ESTE no existe:", col_este_coords_usuario))
+          }
+          
+          # Renombrar columnas según mapeo
+          names(coordenadas)[names(coordenadas) == col_punto_coords_usuario] <- "PUNTO"
+          names(coordenadas)[names(coordenadas) == col_norte_coords_usuario] <- "NORTE"
+          names(coordenadas)[names(coordenadas) == col_este_coords_usuario] <- "ESTE"
+          if (!is.null(col_altitud_coords_usuario) && col_altitud_coords_usuario %in% names(coordenadas)) {
+            names(coordenadas)[names(coordenadas) == col_altitud_coords_usuario] <- "ALTITUD"
+          }
+        } else {
+          stop("Para el Caso 1 es obligatorio cargar el archivo de coordenadas de puntos")
         }
         
-        # Cargar archivo de marco de grillas (opcional)
-        marco_grillas <- NULL
-        if (!is.null(input$archivo_marco_grillas)) {
-          marco_grillas <- read_excel(input$archivo_marco_grillas$datapath)
-          marco_grillas <- estandarizar_columnas(marco_grillas)
+        # Cargar shapefile de marco de grillas (opcional)
+        marco_grillas_sf <- NULL
+        if (!is.null(input$archivo_marco_grillas_shp)) {
+          showNotification("Cargando shapefile de marco de grillas...", type = "message", duration = 2)
+          
+          # Crear directorio temporal
+          temp_dir <- tempdir()
+          zip_path <- input$archivo_marco_grillas_shp$datapath
+          
+          # Descomprimir shapefile
+          unzip(zip_path, exdir = temp_dir)
+          
+          # Buscar archivo .shp
+          shp_files <- list.files(temp_dir, pattern = "\\.shp$", full.names = TRUE, recursive = TRUE)
+          if (length(shp_files) == 0) {
+            stop("No se encontró archivo .shp en el ZIP")
+          }
+          
+          # Cargar shapefile
+          marco_grillas_sf <- st_read(shp_files[1], quiet = TRUE)
+          
+          # Obtener el nombre de la columna de geometría antes de cualquier modificación
+          geom_col <- attr(marco_grillas_sf, "sf_column")
+          
+          # Estandarizar nombres de columnas a MAYÚSCULAS (excepto la geometría)
+          col_names <- names(marco_grillas_sf)
+          col_names_upper <- toupper(col_names)
+          # Restaurar el nombre original de la columna de geometría
+          col_names_upper[col_names == geom_col] <- geom_col
+          names(marco_grillas_sf) <- col_names_upper
+          
+          # ==== APLICAR MAPEO DE COLUMNAS DEL USUARIO ====
+          # Leer el mapeo seleccionado por el usuario en la UI
+          col_locacion_usuario <- toupper(input$col_locacion_marco_shp)
+          col_celda_usuario <- toupper(input$col_celda_marco_shp)
+          col_grilla_usuario <- toupper(input$col_grilla_marco_shp)
+          col_area_usuario <- if (!is.null(input$col_area_marco_shp) && input$col_area_marco_shp != "(ninguna)") {
+            toupper(input$col_area_marco_shp)
+          } else {
+            NULL
+          }
+          
+          # Validar que las columnas seleccionadas existen en el shapefile
+          if (!col_locacion_usuario %in% names(marco_grillas_sf)) {
+            stop(paste("La columna seleccionada para LOCACION no existe:", col_locacion_usuario))
+          }
+          if (!col_celda_usuario %in% names(marco_grillas_sf)) {
+            stop(paste("La columna seleccionada para CELDA no existe:", col_celda_usuario))
+          }
+          if (!col_grilla_usuario %in% names(marco_grillas_sf)) {
+            stop(paste("La columna seleccionada para GRILLA no existe:", col_grilla_usuario))
+          }
+          
+          # Renombrar columnas según el mapeo del usuario
+          # CRÍTICO: NUNCA renombrar la columna de geometría
+          current_names <- names(marco_grillas_sf)
+          if (current_names[current_names == col_locacion_usuario] != geom_col) {
+            names(marco_grillas_sf)[names(marco_grillas_sf) == col_locacion_usuario] <- "LOCACION"
+          }
+          if (current_names[current_names == col_celda_usuario] != geom_col) {
+            names(marco_grillas_sf)[names(marco_grillas_sf) == col_celda_usuario] <- "CELDA"
+          }
+          if (current_names[current_names == col_grilla_usuario] != geom_col) {
+            names(marco_grillas_sf)[names(marco_grillas_sf) == col_grilla_usuario] <- "GRILLA"
+          }
+          if (!is.null(col_area_usuario) && col_area_usuario %in% names(marco_grillas_sf) && 
+              col_area_usuario != geom_col) {
+            names(marco_grillas_sf)[names(marco_grillas_sf) == col_area_usuario] <- "AREA"
+          }
+          
+          showNotification("✓ Shapefile cargado y columnas mapeadas correctamente", type = "message", duration = 3)
         }
         
-        # Enriquecer con Caso 1
-        muestra_enriq <- enriquecer_caso1(resultados_lab_clean, coordenadas, marco_grillas)
+        # Enriquecer con Caso 1 (ahora con matching espacial - retorna lista con datos y diagnostico)
+        resultado_caso1 <- enriquecer_caso1_espacial(resultados_lab_clean, coordenadas, marco_grillas_sf)
+        muestra_enriq <- resultado_caso1$datos
+        
+        # Guardar diagnóstico
+        diagnostico_enriquecimiento(resultado_caso1$diagnostico)
+        
+        # Mostrar alertas si hay problemas
+        diag <- resultado_caso1$diagnostico
+        
+        # Alertas sobre matching Lab-Coordenadas
+        if (diag$tiene_problema_coords) {
+          mensaje_alerta <- paste0(
+            "⚠️ ATENCIÓN: Se detectaron ", diag$n_puntos_solo_lab, " puntos en resultados de laboratorio ",
+            "que NO tienen coordenadas.\n",
+            "Ver detalles en la pestaña 'Diagnóstico de Match'."
+          )
+          showNotification(mensaje_alerta, type = "warning", duration = 10)
+        }
+        
+        # Alertas sobre matching espacial
+        if (isTRUE(diag$tiene_problema_espacial)) {
+          mensaje_espacial <- paste0(
+            "⚠️ MATCHING ESPACIAL: ", diag$n_sin_match_espacial, " puntos no cayeron dentro de ninguna grilla.\n",
+            "Verifica que las coordenadas y el shapefile usen el mismo sistema de referencia.\n",
+            "Ver detalles en la pestaña 'Diagnóstico de Match'."
+          )
+          showNotification(mensaje_espacial, type = "warning", duration = 10)
+        }
         
       } else {
         # CASO 2: Expedientes recientes (2 archivos)
@@ -2427,8 +3664,55 @@ server <- function(input, output, session) {
         muestra_final <- read_excel(input$archivo_muestra_final$datapath)
         muestra_final <- estandarizar_columnas(muestra_final)
         
-        # Enriquecer con Caso 2
-        muestra_enriq <- enriquecer_caso2(resultados_lab_clean, muestra_final)
+        # ==== APLICAR MAPEO DE COLUMNAS DEL USUARIO (Muestra Final) ====
+        col_punto_muestra_usuario <- toupper(input$col_punto_muestra)
+        col_locacion_muestra_usuario <- toupper(input$col_locacion_muestra)
+        col_celda_muestra_usuario <- if (!is.null(input$col_celda_muestra) && input$col_celda_muestra != "(ninguna)") {
+          toupper(input$col_celda_muestra)
+        } else {
+          NULL
+        }
+        col_grilla_muestra_usuario <- if (!is.null(input$col_grilla_muestra) && input$col_grilla_muestra != "(ninguna)") {
+          toupper(input$col_grilla_muestra)
+        } else {
+          NULL
+        }
+        
+        # Validar que las columnas seleccionadas existen
+        if (!col_punto_muestra_usuario %in% names(muestra_final)) {
+          stop(paste("La columna seleccionada para PUNTO no existe:", col_punto_muestra_usuario))
+        }
+        if (!col_locacion_muestra_usuario %in% names(muestra_final)) {
+          stop(paste("La columna seleccionada para LOCACION no existe:", col_locacion_muestra_usuario))
+        }
+        
+        # Renombrar columnas según mapeo
+        names(muestra_final)[names(muestra_final) == col_punto_muestra_usuario] <- "PUNTO"
+        names(muestra_final)[names(muestra_final) == col_locacion_muestra_usuario] <- "LOCACION"
+        if (!is.null(col_celda_muestra_usuario) && col_celda_muestra_usuario %in% names(muestra_final)) {
+          names(muestra_final)[names(muestra_final) == col_celda_muestra_usuario] <- "CELDA"
+        }
+        if (!is.null(col_grilla_muestra_usuario) && col_grilla_muestra_usuario %in% names(muestra_final)) {
+          names(muestra_final)[names(muestra_final) == col_grilla_muestra_usuario] <- "GRILLA"
+        }
+        
+        # Enriquecer con Caso 2 (retorna lista con datos y diagnostico)
+        resultado_caso2 <- enriquecer_caso2(resultados_lab_clean, muestra_final)
+        muestra_enriq <- resultado_caso2$datos
+        
+        # Guardar diagnóstico
+        diagnostico_enriquecimiento(resultado_caso2$diagnostico)
+        
+        # Mostrar alertas si hay problemas
+        diag <- resultado_caso2$diagnostico
+        if (diag$tiene_problema) {
+          mensaje_alerta <- paste0(
+            "⚠️ ATENCIÓN: Se detectaron ", diag$n_puntos_perdidos, " puntos de la muestra final ",
+            "que NO aparecen en el archivo de laboratorio.\n",
+            "Ver detalles en la pestaña 'Diagnóstico de Match'."
+          )
+          showNotification(mensaje_alerta, type = "warning", duration = 10)
+        }
       }
       
       # Guardar resultado
@@ -2455,10 +3739,45 @@ server <- function(input, output, session) {
     req(muestra_enriquecida())
     
     datos <- muestra_enriquecida()
+    diag <- diagnostico_enriquecimiento()
     
     cat("═══════════════════════════════════════════\n")
     cat("  MUESTRA FINAL ENRIQUECIDA\n")
     cat("═══════════════════════════════════════════\n\n")
+    
+    # === ALERTAS CRÍTICAS AL INICIO ===
+    # Detectar si es Caso 1 o Caso 2 y mostrar alertas correspondientes
+    if (!is.null(diag)) {
+      # Caso 2: tiene_problema
+      if (isTRUE(diag$tiene_problema)) {
+        cat("🚨 ALERTAS CRÍTICAS - CASO 2\n")
+        cat("═══════════════════════════════════════════\n")
+        cat("⚠️  Se detectaron puntos NO incluidos en el análisis\n\n")
+        cat("Puntos en muestra final:", diag$n_puntos_muestra_original, "\n")
+        cat("Puntos en archivo lab:", diag$n_puntos_lab_original, "\n")
+        cat("Puntos matcheados:", diag$n_puntos_en_ambos, "\n")
+        cat("❌ PUNTOS PERDIDOS:", diag$n_puntos_perdidos, "\n\n")
+        cat("⚠️  Estos puntos NO aparecerán en 'Todas las Grillas'\n")
+        cat("⚠️  ni en 'Grillas Contaminadas'\n\n")
+        cat("Ver detalles completos en pestaña 'Diagnóstico de Match'\n")
+        cat("═══════════════════════════════════════════\n\n")
+      }
+      # Caso 1: tiene_problema_coords o tiene_problema_espacial
+      else if (isTRUE(diag$tiene_problema_coords) || isTRUE(diag$tiene_problema_espacial)) {
+        cat("🚨 ALERTAS CRÍTICAS - CASO 1\n")
+        cat("═══════════════════════════════════════════\n")
+        if (isTRUE(diag$tiene_problema_coords)) {
+          cat("⚠️  Algunos puntos de laboratorio NO tienen coordenadas\n")
+          cat("   Puntos sin coordenadas:", diag$n_puntos_solo_lab, "\n\n")
+        }
+        if (isTRUE(diag$tiene_problema_espacial)) {
+          cat("⚠️  Algunos puntos NO cayeron en ninguna grilla\n")
+          cat("   Puntos sin match espacial:", diag$n_sin_match_espacial, "\n\n")
+        }
+        cat("Ver detalles completos en pestaña 'Diagnóstico de Match'\n")
+        cat("═══════════════════════════════════════════\n\n")
+      }
+    }
     
     cat("📊 INFORMACIÓN GENERAL\n")
     cat("──────────────────────\n")
@@ -2483,6 +3802,8 @@ server <- function(input, output, session) {
     # Información de celdas y grillas
     if ("CELDA" %in% names(datos)) {
       cat("Celdas únicas:", length(unique(datos$CELDA)), "\n")
+    } else if ("COD_CELDA" %in% names(datos)) {
+      cat("Celdas únicas:", length(unique(datos$COD_CELDA)), "\n")
     }
     if ("GRILLA" %in% names(datos)) {
       cat("Grillas únicas:", length(unique(datos$GRILLA)), "\n\n")
@@ -2530,13 +3851,24 @@ server <- function(input, output, session) {
         stop(paste("Faltan columnas requeridas:", paste(columnas_faltantes, collapse = ", ")))
       }
       
-      # Calcular promedios por celdas (solo si existe CELDA)
-      if ("CELDA" %in% names(datos)) {
+      # Calcular promedios por celdas (buscar CELDA o COD_CELDA)
+      tiene_celda <- "CELDA" %in% names(datos)
+      tiene_cod_celda <- "COD_CELDA" %in% names(datos)
+      
+      if (tiene_celda || tiene_cod_celda) {
+        # Si tiene COD_CELDA pero no CELDA, renombrar para análisis
+        if (!tiene_celda && tiene_cod_celda) {
+          datos <- datos %>% rename(CELDA = COD_CELDA)
+          muestra_enriquecida(datos)  # Actualizar reactivo con columna renombrada
+          showNotification("ℹ️ Columna COD_CELDA renombrada a CELDA para análisis", 
+                          type = "message", duration = 3)
+        }
+        
         prom_celdas <- calcular_promedios_celdas(datos, umbral)
         promedios_celdas_resultado(prom_celdas)
         showNotification("✓ Análisis por celdas completado", type = "message", duration = 3)
       } else {
-        showNotification("⚠ No se encontró columna CELDA - análisis por celdas omitido", 
+        showNotification("⚠ No se encontró columna CELDA ni COD_CELDA - análisis por celdas omitido", 
                         type = "warning", duration = 5)
       }
       
@@ -2562,6 +3894,7 @@ server <- function(input, output, session) {
     datos <- muestra_enriquecida()
     umbral <- input$umbral_tph
     grillas_contam <- datos %>% filter(TPH > umbral)
+    diag <- diagnostico_enriquecimiento()
     
     # Obtener códigos únicos contaminados
     codigos_unicos <- grillas_contam %>% 
@@ -2569,9 +3902,38 @@ server <- function(input, output, session) {
       unique() %>% 
       sort()
     
-    cat("Total de puntos:", nrow(datos), "\n")
-    cat("Puntos contaminados:", nrow(grillas_contam), "\n")
-    cat("Contaminadas únicas (ambos criterios):", length(codigos_unicos), "\n\n")
+    cat("ANÁLISIS NIVEL GRILLA\n")
+    cat("═════════════════════\n\n")
+    
+    # ALERTAS CRÍTICAS si hay puntos perdidos (solo Caso 2)
+    if (!is.null(diag) && isTRUE(diag$tiene_problema)) {
+      cat("🚨 ATENCIÓN - PUNTOS OMITIDOS (CASO 2)\n")
+      cat("─────────────────────────────\n")
+      cat("⚠️  Se detectaron", diag$n_puntos_perdidos, "puntos de la muestra final\n")
+      cat("   que NO aparecen en estas tablas (sin resultados de lab)\n\n")
+      cat("📊 Puntos esperados (muestra final):", diag$n_puntos_muestra_original, "\n")
+      cat("📊 Puntos en análisis (con TPH):", nrow(datos), "\n")
+      cat("❌ Puntos perdidos:", diag$n_puntos_perdidos, "\n\n")
+      cat("Ver detalles en pestaña '🔍 Diagnóstico de Match'\n")
+      cat("═════════════════════════════\n\n")
+    } else if (!is.null(diag) && (isTRUE(diag$tiene_problema_coords) || isTRUE(diag$tiene_problema_espacial))) {
+      cat("🚨 ATENCIÓN - CASO 1\n")
+      cat("─────────────────────────────\n")
+      if (isTRUE(diag$tiene_problema_coords)) {
+        cat("⚠️  Algunos puntos no tienen coordenadas:", diag$n_puntos_solo_lab, "\n")
+      }
+      if (isTRUE(diag$tiene_problema_espacial)) {
+        cat("⚠️  Algunos puntos no cayeron en grillas:", diag$n_sin_match_espacial, "\n")
+      }
+      cat("\nVer detalles en pestaña '🔍 Diagnóstico de Match'\n")
+      cat("═════════════════════════════\n\n")
+    }
+    
+    cat("RESUMEN DE ANÁLISIS\n")
+    cat("───────────────────\n")
+    cat("Total de puntos en análisis:", nrow(datos), "\n")
+    cat("Puntos contaminados (TPH >", umbral, "mg/kg):", nrow(grillas_contam), "\n")
+    cat("Grillas/Códigos contaminados únicos:", length(codigos_unicos), "\n\n")
     cat("Códigos contaminados:\n")
     if (length(codigos_unicos) > 0) {
       cat(paste(codigos_unicos, collapse = ", "))
@@ -2589,7 +3951,38 @@ server <- function(input, output, session) {
       mutate(criterio_contaminacion = "Supera umbral TPH") %>%
       select(criterio_contaminacion, everything())
     
-    datatable(grillas_contam, options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE) %>%
+    # Encontrar índices de columnas TPH y PORC_EXCESO (base 0 para JavaScript)
+    col_indices <- c()
+    if ("TPH" %in% names(grillas_contam)) {
+      col_indices <- c(col_indices, which(names(grillas_contam) == "TPH") - 1)
+    }
+    if ("PORC_EXCESO" %in% names(grillas_contam)) {
+      col_indices <- c(col_indices, which(names(grillas_contam) == "PORC_EXCESO") - 1)
+    }
+    
+    # Crear callback JavaScript para colorear encabezados
+    header_callback <- paste0(
+      "function(thead, data, start, end, display) {",
+      "  var colIndices = [", paste(col_indices, collapse = ","), "];",
+      "  colIndices.forEach(function(idx) {",
+      "    $(thead).find('th').eq(idx).css({",
+      "      'background-color': '#00BCD4',",
+      "      'color': 'white',",
+      "      'font-weight': 'bold'",
+      "    });",
+      "  });",
+      "}"
+    )
+    
+    datatable(
+      grillas_contam, 
+      options = list(
+        pageLength = 10, 
+        scrollX = TRUE,
+        headerCallback = JS(header_callback)
+      ), 
+      rownames = FALSE
+    ) %>%
       formatStyle(
         "criterio_contaminacion",
         backgroundColor = "#dc3545",
@@ -2772,7 +4165,7 @@ server <- function(input, output, session) {
     tiene_patron_grilla <- any(grepl("GRILL|GRID", toupper(paste(cols, collapse = "|"))))
     
     mensaje_advertencia <- if (!tiene_patron_grilla) {
-      div(style = "background-color: #fff3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; margin-bottom: 10px;",
+      div(style = "background-color: #f8d7da; border: 2px solid #dc3545; padding: 10px; border-radius: 4px; margin-bottom: 10px; color: #721c24;",
         icon("exclamation-triangle"),
         strong(" ADVERTENCIA: "),
         "No se detectó ninguna columna con 'GRILLA' o 'GRID'. ",
@@ -2818,7 +4211,7 @@ server <- function(input, output, session) {
     tiene_patron_celda <- any(grepl("CELD|CELL", toupper(paste(cols, collapse = "|"))))
     
     mensaje_advertencia <- if (!tiene_patron_celda) {
-      div(style = "background-color: #fff3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 4px; margin-bottom: 10px;",
+      div(style = "background-color: #f8d7da; border: 2px solid #dc3545; padding: 10px; border-radius: 4px; margin-bottom: 10px; color: #721c24;",
         icon("exclamation-triangle"),
         strong(" ADVERTENCIA: "),
         "No se detectó ninguna columna con 'CELDA' o 'CELL'. ",
@@ -2844,6 +4237,243 @@ server <- function(input, output, session) {
       p(em("Selecciona las columnas que identifican celda, locación y área"), style = "font-size: 0.9em; color: #666;")
     )
   })
+  
+  # ============================================================================ #
+  # OUTPUTS DIAGNÓSTICO DE MATCH (CASO 1 Y CASO 2)                             #
+  # ============================================================================ #
+  
+  # Mostrar si hay diagnóstico disponible
+  output$diagnostico_match_disponible <- reactive({
+    !is.null(diagnostico_enriquecimiento())
+  })
+  outputOptions(output, "diagnostico_match_disponible", suspendWhenHidden = FALSE)
+  
+  # Resumen del diagnóstico
+  output$resumen_diagnostico_match <- renderPrint({
+    diag <- diagnostico_enriquecimiento()
+    
+    # Si no hay diagnóstico, mostrar mensaje amigable
+    if (is.null(diag)) {
+      cat("ℹ️  No hay diagnóstico disponible aún.\n\n")
+      cat("El diagnóstico se genera automáticamente después de\n")
+      cat("cargar y unificar los datos en la Fase 5.\n")
+      return()
+    }
+    
+    cat("═══════════════════════════════════════════\n")
+    cat("  DIAGNÓSTICO DE MATCH ENTRE ARCHIVOS\n")
+    cat("═══════════════════════════════════════════\n\n")
+    
+    # Detectar si es Caso 1 o Caso 2
+    es_caso1 <- !is.null(diag$n_puntos_coord_original)
+    es_caso2 <- !is.null(diag$n_puntos_muestra_original)
+    
+    if (es_caso1) {
+      cat("📂 CASO 1: Matching Espacial\n")
+      cat("──────────────────────────────\n\n")
+      
+      cat("1️⃣ MATCH LAB-COORDENADAS (por código PUNTO):\n")
+      cat("  • Puntos en resultados lab:", if(!is.null(diag$n_puntos_lab_original)) diag$n_puntos_lab_original else 0, "\n")
+      cat("  • Puntos en coordenadas:   ", if(!is.null(diag$n_puntos_coord_original)) diag$n_puntos_coord_original else 0, "\n")
+      cat("  • Match exitoso:           ", if(!is.null(diag$n_puntos_en_ambos)) diag$n_puntos_en_ambos else 0, "\n")
+      cat("  • Solo en lab:             ", if(!is.null(diag$n_puntos_solo_lab)) diag$n_puntos_solo_lab else 0, "\n")
+      cat("  • Solo en coordenadas:     ", if(!is.null(diag$n_puntos_solo_coord)) diag$n_puntos_solo_coord else 0, "\n\n")
+      
+      if (!is.null(diag$n_con_match_espacial)) {
+        n_finales <- if(!is.null(diag$n_puntos_finales)) diag$n_puntos_finales else 1
+        cat("2️⃣ MATCH ESPACIAL (puntos DENTRO de grillas):\n")
+        cat("  • Total puntos procesados: ", n_finales, "\n")
+        cat("  • Con match espacial:      ", diag$n_con_match_espacial, 
+            sprintf(" (%.1f%%)\n", (diag$n_con_match_espacial/n_finales)*100))
+        cat("  • Sin match espacial:      ", if(!is.null(diag$n_sin_match_espacial)) diag$n_sin_match_espacial else 0, 
+            sprintf(" (%.1f%%)\n", (if(!is.null(diag$n_sin_match_espacial)) diag$n_sin_match_espacial else 0)/n_finales*100))
+        cat("  • Sin coordenadas:         ", if(!is.null(diag$n_sin_coordenadas)) diag$n_sin_coordenadas else 0, "\n\n")
+      }
+      
+      # Validar si hay problemas (manejar NULL de forma segura)
+      tiene_problema_coords <- isTRUE(diag$tiene_problema_coords)
+      tiene_problema_espacial <- isTRUE(diag$tiene_problema_espacial)
+      
+      if (tiene_problema_coords || tiene_problema_espacial) {
+        cat("⚠️  ADVERTENCIAS:\n")
+        if (tiene_problema_coords) {
+          cat("  • Hay puntos sin coordenadas\n")
+        }
+        if (tiene_problema_espacial) {
+          cat("  • Hay puntos que no cayeron en ninguna grilla\n")
+        }
+      } else {
+        cat("✅ Todos los puntos tienen match correcto\n")
+      }
+      
+    } else if (es_caso2) {
+      cat("📂 CASO 2: Matching por Códigos\n")
+      cat("──────────────────────────────\n\n")
+      
+      cat("📊 MATCH MUESTRA-LABORATORIO:\n")
+      cat("  • Puntos en muestra final: ", if(!is.null(diag$n_puntos_muestra_original)) diag$n_puntos_muestra_original else 0, "\n")
+      cat("  • Puntos en resultados lab:", if(!is.null(diag$n_puntos_lab_original)) diag$n_puntos_lab_original else 0, "\n")
+      cat("  • Match exitoso:           ", if(!is.null(diag$n_puntos_en_ambos)) diag$n_puntos_en_ambos else 0, "\n")
+      cat("  • Solo en muestra:         ", if(!is.null(diag$n_puntos_solo_muestra)) diag$n_puntos_solo_muestra else 0, "\n")
+      cat("  • Solo en lab:             ", if(!is.null(diag$n_puntos_solo_lab)) diag$n_puntos_solo_lab else 0, "\n")
+      cat("  • Puntos perdidos:         ", if(!is.null(diag$n_puntos_perdidos)) diag$n_puntos_perdidos else 0, "\n")
+      cat("  • Puntos finales:          ", if(!is.null(diag$n_puntos_finales)) diag$n_puntos_finales else 0, "\n\n")
+      
+      tiene_problema <- isTRUE(diag$tiene_problema)
+      if (tiene_problema) {
+        cat("⚠️  HAY PUNTOS DE LA MUESTRA SIN RESULTADOS DE LAB\n")
+      } else {
+        cat("✅ Todos los puntos de la muestra tienen resultados\n")
+      }
+    }
+    
+    cat("\n═══════════════════════════════════════════\n")
+  })
+  
+  # Tabla de puntos perdidos (Caso 2) o puntos sin match (Caso 1)
+  output$tabla_puntos_perdidos <- renderDT({
+    diag <- diagnostico_enriquecimiento()
+    
+    # Si no hay diagnóstico, mostrar mensaje amigable
+    if (is.null(diag)) {
+      return(datatable(
+        data.frame(Mensaje = "ℹ️ No hay diagnóstico disponible aún. Cargue y unifique los datos en la Fase 5."), 
+        options = list(pageLength = 5, dom = 't', ordering = FALSE, searching = FALSE), 
+        rownames = FALSE
+      ))
+    }
+    
+    # Función helper para validar dataframe con datos
+    tiene_datos <- function(df) {
+      !is.null(df) && is.data.frame(df) && nrow(df) > 0
+    }
+    
+    # Determinar qué tabla mostrar según el caso
+    if (tiene_datos(diag$puntos_sin_tph)) {
+      # Caso 2: puntos de muestra sin TPH
+      datatable(diag$puntos_sin_tph, 
+                options = list(pageLength = 10, scrollX = TRUE), 
+                rownames = FALSE,
+                caption = "Puntos de muestra final sin resultados de laboratorio")
+    } else if (tiene_datos(diag$puntos_sin_coordenadas)) {
+      # Caso 1: puntos sin coordenadas
+      datatable(diag$puntos_sin_coordenadas, 
+                options = list(pageLength = 10, scrollX = TRUE), 
+                rownames = FALSE,
+                caption = "Puntos sin coordenadas")
+    } else if (tiene_datos(diag$puntos_sin_match_espacial)) {
+      # Caso 1: puntos sin match espacial
+      datatable(diag$puntos_sin_match_espacial, 
+                options = list(pageLength = 10, scrollX = TRUE), 
+                rownames = FALSE,
+                caption = "Puntos que no cayeron en ninguna grilla")
+    } else {
+      # Sin problemas - Match exitoso
+      datatable(
+        data.frame(Mensaje = "✅ Excelente! Todos los puntos tienen match correcto. No hay puntos perdidos."), 
+        options = list(pageLength = 5, dom = 't', ordering = FALSE, searching = FALSE), 
+        rownames = FALSE
+      )
+    }
+  })
+  
+  # Listas de puntos solo en cada archivo
+  output$lista_puntos_solo_muestra <- renderPrint({
+    diag <- diagnostico_enriquecimiento()
+    
+    if (is.null(diag)) {
+      cat("ℹ️ No hay diagnóstico disponible aún")
+      return()
+    }
+    
+    if (!is.null(diag$puntos_solo_en_muestra) && length(diag$puntos_solo_en_muestra) > 0) {
+      cat(paste(diag$puntos_solo_en_muestra, collapse = ", "))
+    } else if (!is.null(diag$puntos_solo_en_coord) && length(diag$puntos_solo_en_coord) > 0) {
+      cat("Puntos solo en archivo de coordenadas:\n")
+      cat(paste(diag$puntos_solo_en_coord, collapse = ", "))
+    } else {
+      cat("✅ No hay puntos huérfanos")
+    }
+  })
+  
+  output$lista_puntos_solo_lab <- renderPrint({
+    diag <- diagnostico_enriquecimiento()
+    
+    if (is.null(diag)) {
+      cat("ℹ️ No hay diagnóstico disponible aún")
+      return()
+    }
+    
+    if (!is.null(diag$puntos_solo_en_lab) && length(diag$puntos_solo_en_lab) > 0) {
+      cat(paste(diag$puntos_solo_en_lab, collapse = ", "))
+    } else {
+      cat("✅ No hay puntos extra en laboratorio")
+    }
+  })
+  
+  # Descargar reporte de diagnóstico
+  output$descargar_diagnostico_match_btn <- downloadHandler(
+    filename = function() {
+      paste("diagnostico_match-", Sys.Date(), ".txt", sep = "")
+    },
+    content = function(file) {
+      diag <- diagnostico_enriquecimiento()
+      
+      sink(file)
+      cat("═══════════════════════════════════════════\n")
+      cat("  DIAGNÓSTICO COMPLETO DE MATCH\n")
+      cat("  Generado:", as.character(Sys.time()), "\n")
+      cat("═══════════════════════════════════════════\n\n")
+      
+      # Si no hay diagnóstico
+      if (is.null(diag)) {
+        cat("ℹ️ NO HAY DIAGNÓSTICO DISPONIBLE\n\n")
+        cat("Cargue y unifique los datos en la Fase 5\n")
+        cat("para generar el diagnóstico de match.\n")
+        sink()
+        return()
+      }
+      
+      # Detectar caso y escribir diagnóstico completo
+      es_caso1 <- !is.null(diag$n_puntos_coord_original)
+      
+      if (es_caso1) {
+        cat("CASO 1: MATCHING ESPACIAL\n\n")
+        cat("Match Lab-Coordenadas:\n")
+        cat("  Puntos lab:", if(!is.null(diag$n_puntos_lab_original)) diag$n_puntos_lab_original else 0, "\n")
+        cat("  Puntos coord:", if(!is.null(diag$n_puntos_coord_original)) diag$n_puntos_coord_original else 0, "\n")
+        cat("  Match:", if(!is.null(diag$n_puntos_en_ambos)) diag$n_puntos_en_ambos else 0, "\n\n")
+        
+        if (!is.null(diag$puntos_solo_en_lab) && length(diag$puntos_solo_en_lab) > 0) {
+          cat("Puntos solo en lab:\n")
+          cat(paste(diag$puntos_solo_en_lab, collapse = ", "), "\n\n")
+        }
+        
+        if (!is.null(diag$puntos_sin_match_espacial) && is.data.frame(diag$puntos_sin_match_espacial) && nrow(diag$puntos_sin_match_espacial) > 0) {
+          cat("\nPuntos sin match espacial:\n")
+          print(diag$puntos_sin_match_espacial)
+        } else {
+          cat("\n✅ Todos los puntos tienen match espacial correcto\n")
+        }
+      } else {
+        cat("CASO 2: MATCHING POR CÓDIGOS\n\n")
+        cat("Match Muestra-Lab:\n")
+        cat("  Puntos muestra:", if(!is.null(diag$n_puntos_muestra_original)) diag$n_puntos_muestra_original else 0, "\n")
+        cat("  Puntos lab:", if(!is.null(diag$n_puntos_lab_original)) diag$n_puntos_lab_original else 0, "\n")
+        cat("  Match:", if(!is.null(diag$n_puntos_en_ambos)) diag$n_puntos_en_ambos else 0, "\n")
+        cat("  Perdidos:", if(!is.null(diag$n_puntos_perdidos)) diag$n_puntos_perdidos else 0, "\n\n")
+        
+        if (!is.null(diag$puntos_sin_tph) && is.data.frame(diag$puntos_sin_tph) && nrow(diag$puntos_sin_tph) > 0) {
+          cat("\nPuntos perdidos:\n")
+          print(diag$puntos_sin_tph)
+        } else {
+          cat("\n✅ Todos los puntos de la muestra tienen resultados de laboratorio\n")
+        }
+      }
+      
+      sink()
+    }
+  )
   
   # Cargar handlers y outputs adicionales de Fase 5
   # IMPORTANTE: local = TRUE para ejecutar en el entorno del servidor con acceso a output, input, session

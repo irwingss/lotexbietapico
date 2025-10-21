@@ -49,6 +49,14 @@ estandarizar_columnas <- function(df) {
     }
   }
   
+  # === UNIFICACIÓN ESPECIAL PARA CELDA ===
+  # Si existe COD_CELDA pero no existe CELDA, renombrar COD_CELDA a CELDA
+  # Esto facilita el análisis de celdas en Fase 5
+  if ("COD_CELDA" %in% names(df) && !"CELDA" %in% names(df)) {
+    names(df)[names(df) == "COD_CELDA"] <- "CELDA"
+    cat("ℹ️ Columna COD_CELDA renombrada automáticamente a CELDA\n")
+  }
+  
   # Mensaje informativo sobre las columnas encontradas
   cat("Columnas estandarizadas:", paste(names(df), collapse = ", "), "\n")
   
