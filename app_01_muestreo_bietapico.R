@@ -2927,4 +2927,4 @@ server <- function(input, output, session) {
 }
 
 # Correr la aplicación
-shinyApp(ui = ui, server = server)
+shinyApp(ui = ui, server = server) 
