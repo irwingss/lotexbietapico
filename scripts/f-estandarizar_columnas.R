@@ -17,6 +17,8 @@ estandarizar_columnas <- function(df) {
     "NORTE" = c("norte", "Norte", "y", "Y", "coord_y", "COORD_Y"),
     # Profundidad
     "PROF" = c("prof", "Prof", "profundidad", "Profundidad", "depth", "DEPTH"),
+    # Porcentaje de superposición
+    "P_SUPERPOS" = c("p_superpos", "P_Superpos", "superpos", "SUPERPOS", "superposicion", "SUPERPOSICION", "p_superposicion", "P_SUPERPOSICION", "overlap", "OVERLAP"),
     # Celda (código simple)
     "CELDA" = c("celda", "Celda"),
     # Código de celda (con prefijo cod_)

@@ -813,14 +813,23 @@ output$tabla_vertices_celdas <- renderDT({
 
 # Resumen de conteos de elementos contaminados
 output$resumen_unificado_conteos <- renderUI({
-  # Verificar que hay datos
-  tiene_grillas <- !is.null(vertices_grillas_unificado())
-  tiene_celdas <- !is.null(vertices_celdas_unificado())
-  tiene_locaciones <- !is.null(promedios_locaciones_resultado())
+  # Verificar que hay datos de vértices generados
+  tiene_grillas <- !is.null(vertices_grillas_unificado()) && nrow(vertices_grillas_unificado()) > 0
+  tiene_celdas <- !is.null(vertices_celdas_unificado()) && nrow(vertices_celdas_unificado()) > 0
+  tiene_locaciones <- !is.null(promedios_locaciones_resultado()) && nrow(promedios_locaciones_resultado()) > 0
   
+  # Si no hay ningún dato, mostrar mensaje de advertencia
   if (!tiene_grillas && !tiene_celdas && !tiene_locaciones) {
-    return(p("⚠️ No hay datos de análisis unificado disponibles. Genere primero los vértices.", 
-             style = "color: #856404; font-weight: bold;"))
+    return(div(class = "alert alert-warning",
+      h5("⚠️ No hay datos de análisis disponibles", style = "margin-top: 0;"),
+      p("Para visualizar el resumen ejecutivo:"),
+      tags$ol(
+        tags$li("Asegúrese de haber cargado archivos de laboratorio"),
+        tags$li("Genere los promedios y análisis (pestaña 'Análisis')"),
+        tags$li("Cargue los shapefiles (pestaña 'Shapefiles')"),
+        tags$li("Presione el botón 'Generar Vértices'")
+      )
+    ))
   }
   
   # Contar elementos únicos
@@ -877,12 +886,18 @@ output$resumen_unificado_conteos <- renderUI({
 
 # Lista de códigos de grillas contaminadas
 output$lista_grillas_unificado <- renderUI({
-  req(vertices_grillas_unificado())
+  if (is.null(vertices_grillas_unificado())) {
+    return(p("⏳ Genere vértices primero", style = "color: #999; font-style: italic;"))
+  }
   
   grillas <- unique(vertices_grillas_unificado()$COD_GRILLA)
   
   if (length(grillas) == 0) {
-    return(p("Ninguna", style = "color: #999; font-style: italic;"))
+    return(div(
+      p("✅ Ninguna grilla individual requiere remediación", style = "color: #5cb85c; font-style: italic; margin: 0;"),
+      p("(Todas las grillas pertenecen a celdas o locaciones que se remediarán completas)", 
+        style = "font-size: 0.85em; color: #666; margin-top: 5px;")
+    ))
   }
   
   # Ordenar alfabéticamente
@@ -898,12 +913,18 @@ output$lista_grillas_unificado <- renderUI({
 
 # Lista de códigos de celdas contaminadas
 output$lista_celdas_unificado <- renderUI({
-  req(vertices_celdas_unificado())
+  if (is.null(vertices_celdas_unificado())) {
+    return(p("⏳ Genere vértices primero", style = "color: #999; font-style: italic;"))
+  }
   
   celdas <- unique(vertices_celdas_unificado()$COD_UNIC)
   
   if (length(celdas) == 0) {
-    return(p("Ninguna", style = "color: #999; font-style: italic;"))
+    return(div(
+      p("✅ Ninguna celda individual requiere remediación", style = "color: #5cb85c; font-style: italic; margin: 0;"),
+      p("(Todas las celdas pertenecen a locaciones que se remediarán completas)", 
+        style = "font-size: 0.85em; color: #666; margin-top: 5px;")
+    ))
   }
   
   # Ordenar alfabéticamente
@@ -919,12 +940,14 @@ output$lista_celdas_unificado <- renderUI({
 
 # Lista de códigos de locaciones contaminadas
 output$lista_locaciones_contaminadas <- renderUI({
-  req(promedios_locaciones_resultado())
+  if (is.null(promedios_locaciones_resultado())) {
+    return(p("⏳ Genere análisis primero", style = "color: #999; font-style: italic;"))
+  }
   
   loc_data <- promedios_locaciones_resultado()
   
   if (!"criterio_contaminacion" %in% names(loc_data)) {
-    return(p("No disponible", style = "color: #999; font-style: italic;"))
+    return(p("⚠️ Análisis incompleto", style = "color: #856404; font-style: italic;"))
   }
   
   locaciones <- loc_data %>% 
@@ -932,7 +955,9 @@ output$lista_locaciones_contaminadas <- renderUI({
     pull(LOCACION)
   
   if (length(locaciones) == 0) {
-    return(p("Ninguna", style = "color: #999; font-style: italic;"))
+    return(div(
+      p("✅ Ninguna locación requiere remediación completa", style = "color: #5cb85c; font-style: italic;")
+    ))
   }
   
   # Ordenar alfabéticamente
@@ -1602,6 +1627,513 @@ output$descargar_shapefiles_contaminados_btn <- downloadHandler(
     }, error = function(e) {
       registrar_error(e$message, "Descarga shapefiles contaminados")
       showNotification(paste("Error al generar shapefiles:", e$message), type = "error", duration = 10)
+    })
+  }
+)
+
+# ============================================================================ #
+# OUTPUTS PARA PESTAÑA "SIN ANÁLISIS JERÁRQUICO"
+# ============================================================================ #
+
+# Resumen de conteos SIN jerarquía (todos los elementos contaminados)
+output$resumen_sin_jerarquia_conteos <- renderUI({
+  # Verificar que hay datos
+  req(muestra_enriquecida())
+  
+  umbral <- input$umbral_tph
+  
+  # Contar grillas contaminadas (todas, sin filtro)
+  n_grillas <- muestra_enriquecida() %>%
+    filter(TPH > umbral) %>%
+    nrow()
+  
+  # Contar celdas contaminadas (todas, sin filtro)
+  n_celdas <- 0
+  if (!is.null(promedios_celdas_resultado())) {
+    n_celdas <- promedios_celdas_resultado() %>%
+      filter(criterio_contaminacion != "No contaminada") %>%
+      nrow()
+  }
+  
+  # Contar locaciones contaminadas
+  n_locaciones <- 0
+  if (!is.null(promedios_locaciones_resultado())) {
+    n_locaciones <- promedios_locaciones_resultado() %>%
+      filter(criterio_contaminacion != "No contaminada") %>%
+      nrow()
+  }
+  
+  # Crear tabla de resumen
+  div(
+    tags$table(class = "table table-bordered table-striped", style = "margin-bottom: 0;",
+      tags$thead(
+        tags$tr(
+          tags$th("Nivel", style = "background-color: #5bc0de; color: white; text-align: center;"),
+          tags$th("Cantidad", style = "background-color: #5bc0de; color: white; text-align: center;"),
+          tags$th("Descripción", style = "background-color: #5bc0de; color: white; text-align: center;")
+        )
+      ),
+      tags$tbody(
+        tags$tr(
+          tags$td("📍 Grillas", style = "font-weight: bold;"),
+          tags$td(n_grillas, style = "text-align: center; font-size: 1.2em; font-weight: bold; color: #d9534f;"),
+          tags$td("Todas las grillas que superan el umbral TPH")
+        ),
+        tags$tr(
+          tags$td("🔲 Celdas", style = "font-weight: bold;"),
+          tags$td(n_celdas, style = "text-align: center; font-size: 1.2em; font-weight: bold; color: #f0ad4e;"),
+          tags$td("Todas las celdas contaminadas (incluye celdas de locaciones contaminadas)")
+        ),
+        tags$tr(
+          tags$td("🏢 Locaciones", style = "font-weight: bold;"),
+          tags$td(n_locaciones, style = "text-align: center; font-size: 1.2em; font-weight: bold; color: #5bc0de;"),
+          tags$td("Todas las locaciones contaminadas")
+        ),
+        tags$tr(style = "background-color: #f9f9f9; font-weight: bold;",
+          tags$td("TOTAL ELEMENTOS", style = "text-align: right;"),
+          tags$td(n_grillas + n_celdas + n_locaciones, 
+                  style = "text-align: center; font-size: 1.3em; color: #333;"),
+          tags$td("Total de elementos contaminados (puede haber sobreposición)")
+        )
+      )
+    )
+  )
+})
+
+# Lista de códigos de grillas SIN jerarquía
+output$lista_grillas_sin_jerarquia <- renderUI({
+  req(muestra_enriquecida())
+  
+  umbral <- input$umbral_tph
+  
+  grillas <- muestra_enriquecida() %>%
+    filter(TPH > umbral) %>%
+    pull(GRILLA) %>%
+    unique() %>%
+    sort()
+  
+  if (length(grillas) == 0) {
+    return(p("Ninguna", style = "color: #999; font-style: italic;"))
+  }
+  
+  div(
+    p(strong(paste("Total:", length(grillas), "grillas")), style = "margin-bottom: 5px;"),
+    tags$div(style = "max-height: 200px; overflow-y: auto; background: #f9f9f9; padding: 8px; border-radius: 4px; font-size: 0.9em;",
+      paste(grillas, collapse = ", ")
+    )
+  )
+})
+
+# Lista de códigos de celdas SIN jerarquía
+output$lista_celdas_sin_jerarquia <- renderUI({
+  req(promedios_celdas_resultado())
+  
+  celdas <- promedios_celdas_resultado() %>%
+    filter(criterio_contaminacion != "No contaminada") %>%
+    pull(CELDA) %>%
+    unique() %>%
+    sort()
+  
+  if (length(celdas) == 0) {
+    return(p("Ninguna", style = "color: #999; font-style: italic;"))
+  }
+  
+  div(
+    p(strong(paste("Total:", length(celdas), "celdas")), style = "margin-bottom: 5px;"),
+    tags$div(style = "max-height: 200px; overflow-y: auto; background: #f9f9f9; padding: 8px; border-radius: 4px; font-size: 0.9em;",
+      paste(celdas, collapse = ", ")
+    )
+  )
+})
+
+# Lista de códigos de locaciones SIN jerarquía (igual que con jerarquía)
+output$lista_locaciones_sin_jerarquia <- renderUI({
+  req(promedios_locaciones_resultado())
+  
+  locaciones <- promedios_locaciones_resultado() %>%
+    filter(criterio_contaminacion != "No contaminada") %>%
+    pull(LOCACION) %>%
+    unique() %>%
+    sort()
+  
+  if (length(locaciones) == 0) {
+    return(p("Ninguna", style = "color: #999; font-style: italic;"))
+  }
+  
+  div(
+    p(strong(paste("Total:", length(locaciones), "locaciones")), style = "margin-bottom: 5px;"),
+    tags$div(style = "max-height: 200px; overflow-y: auto; background: #f9f9f9; padding: 8px; border-radius: 4px; font-size: 0.9em;",
+      paste(locaciones, collapse = ", ")
+    )
+  )
+})
+
+# ============================================================================ #
+# DESCARGAR REPORTE CONTAMINADAS CON JERARQUÍA
+# ============================================================================ #
+
+output$descargar_reporte_jerarquia_btn <- downloadHandler(
+  filename = function() {
+    generar_nombre_archivo_fase5("Reporte_CONTAMINADAS_JERARQUIA")
+  },
+  content = function(file) {
+    req(vertices_grillas_unificado())
+    req(vertices_celdas_unificado())
+    req(promedios_locaciones_resultado())
+    
+    tryCatch({
+      # Crear un workbook con múltiples hojas
+      wb <- openxlsx::createWorkbook()
+      umbral <- input$umbral_tph
+      
+      # ========== Hoja 1: GRILLAS CONTAMINADAS (CON JERARQUÍA) ==========
+      # Solo grillas que NO pertenecen a celdas o locaciones contaminadas
+      if (!is.null(vertices_grillas_unificado())) {
+        grillas_jerarquia <- muestra_enriquecida() %>%
+          filter(GRILLA %in% unique(vertices_grillas_unificado()$COD_GRILLA)) %>%
+          mutate(criterio_contaminacion = "Supera umbral TPH") %>%
+          select(criterio_contaminacion, everything())
+        
+        if (nrow(grillas_jerarquia) > 0) {
+          openxlsx::addWorksheet(wb, "Grillas_Jerarquia")
+          openxlsx::writeData(wb, "Grillas_Jerarquia", grillas_jerarquia)
+        }
+      }
+      
+      # ========== Hoja 2: CELDAS CONTAMINADAS (CON JERARQUÍA) ==========
+      # Solo celdas que NO pertenecen a locaciones contaminadas
+      if (!is.null(vertices_celdas_unificado()) && !is.null(promedios_celdas_resultado())) {
+        # Extraer códigos únicos de celdas después de exclusión jerárquica
+        celdas_jerarquia_codigos <- unique(vertices_celdas_unificado()$COD_UNIC)
+        
+        celdas_jerarquia <- promedios_celdas_resultado() %>%
+          filter(CELDA %in% celdas_jerarquia_codigos) %>%
+          filter(criterio_contaminacion != "No contaminada") %>%
+          select(criterio_contaminacion, everything())
+        
+        if (nrow(celdas_jerarquia) > 0) {
+          openxlsx::addWorksheet(wb, "Celdas_Jerarquia")
+          openxlsx::writeData(wb, "Celdas_Jerarquia", celdas_jerarquia)
+        }
+      }
+      
+      # ========== Hoja 3: LOCACIONES CONTAMINADAS ==========
+      # Locaciones contaminadas (nivel más alto, siempre se incluye)
+      if (!is.null(promedios_locaciones_resultado())) {
+        locaciones_contaminadas <- promedios_locaciones_resultado() %>%
+          filter(criterio_contaminacion != "No contaminada") %>%
+          select(criterio_contaminacion, everything())
+        
+        if (nrow(locaciones_contaminadas) > 0) {
+          openxlsx::addWorksheet(wb, "Locaciones")
+          openxlsx::writeData(wb, "Locaciones", locaciones_contaminadas)
+        }
+      }
+      
+      # ========== Hoja 4: RESUMEN EJECUTIVO CON JERARQUÍA ==========
+      n_grillas_jer <- if (exists("grillas_jerarquia")) nrow(grillas_jerarquia) else 0
+      n_celdas_jer <- if (exists("celdas_jerarquia")) nrow(celdas_jerarquia) else 0
+      n_locaciones_jer <- if (exists("locaciones_contaminadas")) nrow(locaciones_contaminadas) else 0
+      
+      resumen_data <- data.frame(
+        Nivel = c("📍 Grillas Individuales", "🔲 Celdas Completas", "🏢 Locaciones Completas", "═ TOTAL ÁREAS DISCRETAS"),
+        Cantidad = c(n_grillas_jer, n_celdas_jer, n_locaciones_jer, n_grillas_jer + n_celdas_jer + n_locaciones_jer),
+        Descripcion = c(
+          "Grillas que NO pertenecen a celdas/locaciones contaminadas",
+          "Celdas que NO pertenecen a locaciones contaminadas",
+          "Locaciones completas contaminadas",
+          "Total de áreas sujetas a remediación (sin duplicación)"
+        ),
+        Umbral_TPH = rep(umbral, 4),
+        Fecha_Analisis = rep(as.character(Sys.Date()), 4)
+      )
+      
+      openxlsx::addWorksheet(wb, "RESUMEN_JERARQUIA", gridLines = TRUE)
+      openxlsx::writeData(wb, "RESUMEN_JERARQUIA", resumen_data)
+      
+      # Aplicar formato al resumen
+      header_style <- openxlsx::createStyle(
+        fontSize = 12, 
+        fontColour = "#FFFFFF", 
+        halign = "center",
+        fgFill = "#d9534f", 
+        border = "TopBottomLeftRight", 
+        borderColour = "#d9534f",
+        textDecoration = "bold"
+      )
+      
+      openxlsx::addStyle(wb, sheet = "RESUMEN_JERARQUIA", header_style, rows = 1, cols = 1:5, gridExpand = TRUE)
+      
+      # Hoja 5: EXPLICACIÓN DE LA JERARQUÍA
+      explicacion <- data.frame(
+        Seccion = c(
+          "ANÁLISIS CON JERARQUÍA",
+          "",
+          "Lógica aplicada:",
+          "1. Nivel más alto",
+          "2. Nivel medio",
+          "3. Nivel individual",
+          "",
+          "Ventaja:",
+          "",
+          "Ejemplo práctico:",
+          "",
+          "",
+          "Importante:"
+        ),
+        Contenido = c(
+          paste("Generado el:", Sys.time()),
+          "",
+          "Prima LOCACIÓN sobre CELDAS, y CELDAS sobre GRILLAS",
+          "Si una LOCACIÓN está contaminada, se remedia COMPLETA (no se listan sus celdas/grillas)",
+          "Si una CELDA está contaminada (y su locación NO), se remedia COMPLETA (no se listan sus grillas)",
+          "Solo se listan GRILLAS individuales si NO pertenecen a celdas/locaciones contaminadas",
+          "",
+          "Evita duplicación: no acusa grillas de celdas que ya se van a remediar completas",
+          "",
+          "Si Locación A tiene 3 celdas contaminadas, solo se reporta 'Locación A' (no sus 3 celdas)",
+          "Si Celda C-01 tiene 5 grillas contaminadas, solo se reporta 'Celda C-01' (no sus 5 grillas)",
+          "Solo si una grilla aislada está contaminada (sin celda/locación contaminada), se reporta individualmente",
+          ""
+        )
+      )
+      
+      openxlsx::addWorksheet(wb, "EXPLICACION", gridLines = TRUE)
+      openxlsx::writeData(wb, "EXPLICACION", explicacion, colNames = FALSE)
+      
+      # Guardar el workbook
+      openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+      
+      showNotification("Reporte con jerarquía generado exitosamente", type = "message", duration = 5)
+      
+    }, error = function(e) {
+      registrar_error(e$message, "Descarga reporte con jerarquía")
+      showNotification(paste("Error al generar reporte con jerarquía:", e$message), type = "error", duration = 10)
+    })
+  }
+)
+
+# ============================================================================ #
+# DESCARGAR VÉRTICES CON JERARQUÍA (EXCEL)
+# ============================================================================ #
+
+output$descargar_vertices_jerarquia_btn <- downloadHandler(
+  filename = function() {
+    generar_nombre_archivo_fase5("Vertices_JERARQUIA")
+  },
+  content = function(file) {
+    tryCatch({
+      # Crear un workbook con múltiples hojas
+      wb <- openxlsx::createWorkbook()
+      umbral <- input$umbral_tph
+      
+      tiene_datos <- FALSE
+      
+      # ========== Hoja 1: VÉRTICES DE GRILLAS (CON JERARQUÍA) ==========
+      # Solo grillas que NO pertenecen a celdas o locaciones contaminadas
+      if (!is.null(vertices_grillas_unificado()) && nrow(vertices_grillas_unificado()) > 0) {
+        vertices_grillas <- vertices_grillas_unificado() %>%
+          select(criterio_contaminacion, COD_GRILLA, LOCACION, AREA, ESTE, NORTE, everything())
+        
+        openxlsx::addWorksheet(wb, "Vertices_Grillas")
+        openxlsx::writeData(wb, "Vertices_Grillas", vertices_grillas)
+        
+        # Aplicar formato al encabezado
+        header_style <- openxlsx::createStyle(
+          fontSize = 11, 
+          fontColour = "#FFFFFF", 
+          halign = "center",
+          fgFill = "#d9534f", 
+          border = "TopBottomLeftRight",
+          textDecoration = "bold"
+        )
+        openxlsx::addStyle(wb, sheet = "Vertices_Grillas", header_style, rows = 1, 
+                          cols = 1:ncol(vertices_grillas), gridExpand = TRUE)
+        
+        tiene_datos <- TRUE
+      }
+      
+      # ========== Hoja 2: VÉRTICES DE CELDAS (CON JERARQUÍA) ==========
+      # Solo celdas que NO pertenecen a locaciones contaminadas
+      if (!is.null(vertices_celdas_unificado()) && nrow(vertices_celdas_unificado()) > 0) {
+        vertices_celdas <- vertices_celdas_unificado() %>%
+          select(criterio_contaminacion, COD_UNIC, LOCACION, AREA, ESTE, NORTE, everything())
+        
+        openxlsx::addWorksheet(wb, "Vertices_Celdas")
+        openxlsx::writeData(wb, "Vertices_Celdas", vertices_celdas)
+        
+        # Aplicar formato al encabezado
+        header_style <- openxlsx::createStyle(
+          fontSize = 11, 
+          fontColour = "#FFFFFF", 
+          halign = "center",
+          fgFill = "#f0ad4e", 
+          border = "TopBottomLeftRight",
+          textDecoration = "bold"
+        )
+        openxlsx::addStyle(wb, sheet = "Vertices_Celdas", header_style, rows = 1, 
+                          cols = 1:ncol(vertices_celdas), gridExpand = TRUE)
+        
+        tiene_datos <- TRUE
+      }
+      
+      # ========== Hoja 3: PROMEDIOS DE LOCACIONES CONTAMINADAS ==========
+      # No hay vértices de locaciones, pero incluimos los promedios para referencia
+      if (!is.null(promedios_locaciones_resultado())) {
+        locaciones_contaminadas <- promedios_locaciones_resultado() %>%
+          filter(criterio_contaminacion != "No contaminada") %>%
+          select(LOCACION, TPH, criterio_contaminacion, contaminada_por_tph, 
+                 contaminada_por_proporcion, prop_exceed, n_puntos_total, n_puntos_contaminados, 
+                 everything())
+        
+        if (nrow(locaciones_contaminadas) > 0) {
+          openxlsx::addWorksheet(wb, "Locaciones_Contaminadas")
+          openxlsx::writeData(wb, "Locaciones_Contaminadas", locaciones_contaminadas)
+          
+          # Aplicar formato al encabezado
+          header_style <- openxlsx::createStyle(
+            fontSize = 11, 
+            fontColour = "#FFFFFF", 
+            halign = "center",
+            fgFill = "#5bc0de", 
+            border = "TopBottomLeftRight",
+            textDecoration = "bold"
+          )
+          openxlsx::addStyle(wb, sheet = "Locaciones_Contaminadas", header_style, rows = 1, 
+                            cols = 1:ncol(locaciones_contaminadas), gridExpand = TRUE)
+          
+          tiene_datos <- TRUE
+        }
+      }
+      
+      # ========== Hoja 4: RESUMEN EJECUTIVO ==========
+      n_grillas <- if (!is.null(vertices_grillas_unificado())) length(unique(vertices_grillas_unificado()$COD_GRILLA)) else 0
+      n_celdas <- if (!is.null(vertices_celdas_unificado())) length(unique(vertices_celdas_unificado()$COD_UNIC)) else 0
+      n_locaciones <- 0
+      if (!is.null(promedios_locaciones_resultado())) {
+        n_locaciones <- promedios_locaciones_resultado() %>% 
+          filter(criterio_contaminacion != "No contaminada") %>% 
+          nrow()
+      }
+      
+      resumen_data <- data.frame(
+        Nivel = c("📍 Grillas Individuales", "🔲 Celdas Completas", "🏢 Locaciones Completas", "═ TOTAL POLÍGONOS"),
+        Cantidad_Elementos = c(n_grillas, n_celdas, n_locaciones, n_grillas + n_celdas + n_locaciones),
+        Descripcion = c(
+          "Vértices de grillas que NO pertenecen a celdas/locaciones contaminadas",
+          "Vértices de celdas que NO pertenecen a locaciones contaminadas",
+          "Locaciones completas (promedios, no tienen vértices)",
+          "Total de polígonos discretos para remediación"
+        ),
+        Hoja_Excel = c("Vertices_Grillas", "Vertices_Celdas", "Locaciones_Contaminadas", "---"),
+        Umbral_TPH = rep(umbral, 4),
+        Fecha_Generacion = rep(as.character(Sys.Date()), 4)
+      )
+      
+      openxlsx::addWorksheet(wb, "RESUMEN", gridLines = TRUE)
+      openxlsx::writeData(wb, "RESUMEN", resumen_data)
+      
+      # Aplicar formato al resumen
+      header_style <- openxlsx::createStyle(
+        fontSize = 12, 
+        fontColour = "#FFFFFF", 
+        halign = "center",
+        fgFill = "#5cb85c", 
+        border = "TopBottomLeftRight", 
+        borderColour = "#5cb85c",
+        textDecoration = "bold"
+      )
+      openxlsx::addStyle(wb, sheet = "RESUMEN", header_style, rows = 1, cols = 1:6, gridExpand = TRUE)
+      
+      # ========== Hoja 5: EXPLICACIÓN ==========
+      explicacion <- data.frame(
+        Seccion = c(
+          "VÉRTICES DE POLÍGONOS CON JERARQUÍA",
+          "",
+          "Contenido:",
+          "• Hoja 'Vertices_Grillas'",
+          "• Hoja 'Vertices_Celdas'",
+          "• Hoja 'Locaciones_Contaminadas'",
+          "",
+          "Lógica jerárquica aplicada:",
+          "1. LOCACIÓN > CELDA > GRILLA",
+          "2. Prima nivel superior",
+          "3. Exclusión automática",
+          "",
+          "¿Para qué sirven estos vértices?",
+          "",
+          "",
+          "",
+          "Nota importante:"
+        ),
+        Contenido = c(
+          paste("Generado el:", Sys.time()),
+          "",
+          "Este archivo contiene las coordenadas (vértices) de los polígonos contaminados",
+          "Coordenadas de grillas individuales (sin celdas/locaciones contaminadas)",
+          "Coordenadas de celdas completas (sin locaciones contaminadas)",
+          "Promedios de locaciones contaminadas (nivel más alto)",
+          "",
+          "",
+          "Si una locación está contaminada, NO se listan sus celdas ni grillas",
+          "Si una celda está contaminada, NO se listan sus grillas individuales",
+          "Solo se listan grillas individuales que NO pertenecen a niveles superiores contaminados",
+          "",
+          "Para importar en software GIS (ArcGIS, QGIS, etc.)",
+          "Para delimitar áreas de remediación",
+          "Para calcular superficies exactas de intervención",
+          "Para generar mapas de campo",
+          "Los vértices están en formato ESTE (X), NORTE (Y) en sistema de coordenadas UTM"
+        )
+      )
+      
+      openxlsx::addWorksheet(wb, "EXPLICACION", gridLines = TRUE)
+      openxlsx::writeData(wb, "EXPLICACION", explicacion, colNames = FALSE)
+      
+      # Verificar si hay datos para exportar
+      if (!tiene_datos) {
+        # Si no hay datos, agregar una nota
+        openxlsx::addWorksheet(wb, "INFORMACION")
+        info <- data.frame(
+          Mensaje = c(
+            "No hay vértices disponibles para exportar.",
+            "",
+            "Posibles razones:",
+            "1. No se han generado vértices aún (presione el botón 'Generar Vértices')",
+            "2. Todos los elementos contaminados se remedian a nivel de LOCACIÓN completa",
+            "3. No hay shapefiles de grillas/celdas cargados"
+          )
+        )
+        openxlsx::writeData(wb, "INFORMACION", info, colNames = FALSE)
+      }
+      
+      # Guardar el workbook
+      openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+      
+      if (tiene_datos) {
+        showNotification("Excel de vértices con jerarquía generado exitosamente", type = "message", duration = 5)
+      } else {
+        showNotification("Excel generado con información (no hay vértices disponibles)", type = "warning", duration = 5)
+      }
+      
+    }, error = function(e) {
+      error_msg <- if (!is.null(e$message) && nchar(e$message) > 0) {
+        e$message
+      } else {
+        paste("Error en línea:", deparse(conditionCall(e)), collapse = " ")
+      }
+      
+      # Registrar error con información adicional
+      registrar_error(error_msg, "Descarga vértices con jerarquía")
+      
+      # Mostrar notificación al usuario
+      showNotification(paste("Error al generar Excel de vértices:", error_msg), type = "error", duration = 10)
+      
+      # Log adicional en consola para debugging
+      cat("\n❌ ERROR en descarga de vértices con jerarquía:\n")
+      cat("Mensaje:", error_msg, "\n")
+      cat("Clase:", class(e), "\n")
+      print(e)
     })
   }
 )
