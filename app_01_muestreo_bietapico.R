@@ -563,6 +563,67 @@ ui <- navbarPage(
                                            )
                                          )
                                 ),
+                                tabPanel("Datos clave para el acta/informe",
+                                         h3("📊 Información para Actas e Informes", class = "fade-in"),
+                                         div(class = "alert alert-info",
+                                           h4("ℹ️ Sobre esta sección"),
+                                           p("Esta pestaña genera automáticamente el texto en formato Markdown con todos los datos clave del muestreo bietápico, listo para copiar y pegar en actas o informes técnicos."),
+                                           p(tags$b("Requisito:"), " Debe ejecutar primero el ", tags$code("Muestreo Bietápico"), " en la columna izquierda.")
+                                         ),
+                                         div(class = "card fade-in",
+                                           fluidRow(
+                                             column(width = 12,
+                                                    uiOutput("info_datos_clave_disponibles"),
+                                                    conditionalPanel(
+                                                      condition = "output.datos_clave_disponible",
+                                                      tags$hr(),
+                                                      div(style = "background-color: #f9f9f9; padding: 15px; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 20px;",
+                                                        div(style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;",
+                                                          h4("📝 Texto generado (Markdown)", style = "margin: 0;"),
+                                                          div(
+                                                            actionButton("copiar_texto_btn", "📋 Copiar al Portapapeles", 
+                                                                        class = "btn-primary btn-sm", 
+                                                                        onclick = "copyToClipboard()"),
+                                                            tags$style(HTML("
+                                                              #copiar_texto_btn { margin-right: 5px; }
+                                                            ")),
+                                                            downloadButton("descargar_texto_acta_btn", "💾 Descargar .md", class = "btn-success btn-sm")
+                                                          )
+                                                        ),
+                                                        div(style = "background-color: white; padding: 15px; border-radius: 4px; max-height: 600px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; border: 1px solid #ccc;",
+                                                          uiOutput("texto_datos_clave_markdown")
+                                                        )
+                                                      ),
+                                                      tags$script(HTML("
+                                                        function copyToClipboard() {
+                                                          var texto = document.querySelector('#texto_datos_clave_markdown pre');
+                                                          if (texto) {
+                                                            var range = document.createRange();
+                                                            range.selectNode(texto);
+                                                            window.getSelection().removeAllRanges();
+                                                            window.getSelection().addRange(range);
+                                                            document.execCommand('copy');
+                                                            window.getSelection().removeAllRanges();
+                                                            
+                                                            // Mostrar feedback
+                                                            var btn = document.getElementById('copiar_texto_btn');
+                                                            var originalText = btn.innerHTML;
+                                                            btn.innerHTML = '✅ Copiado!';
+                                                            btn.classList.add('btn-success');
+                                                            btn.classList.remove('btn-primary');
+                                                            setTimeout(function() {
+                                                              btn.innerHTML = originalText;
+                                                              btn.classList.remove('btn-success');
+                                                              btn.classList.add('btn-primary');
+                                                            }, 2000);
+                                                          }
+                                                        }
+                                                      "))
+                                                    )
+                                             )
+                                           )
+                                         )
+                                ),
                                 tabPanel("Muestra Final", 
                                          h3("Rejillas Seleccionadas", class = "fade-in"),
                                          div(class = "card fade-in",
@@ -3856,6 +3917,9 @@ server <- function(input, output, session) {
   datos_finales_df <- reactiveVal(NULL)
   resumen_muestreo <- reactiveVal(NULL)
   
+  # Variable reactiva para almacenar datos clave del muestreo
+  datos_clave_muestreo <- reactiveVal(NULL)
+  
   observeEvent(input$ejecutar_muestreo_btn, {
     req(marco_celdas(), marco_grillas(), n_muestral())
     
@@ -4006,6 +4070,53 @@ server <- function(input, output, session) {
       })
       
       resumen_muestreo(paste(resumen_final, collapse = "\n"))
+      
+      # ========================================================================== #
+      # CAPTURAR DATOS CLAVE PARA ACTA/INFORME
+      # ========================================================================== #
+      
+      # Calcular rejillas uniformes y proporcionales
+      n_celdas_seleccionadas <- length(unique(datos_final$COD_CELDA))
+      rejillas_uniformes <- minimo_rejillas * n_celdas_seleccionadas
+      rejillas_proporcionales <- n - rejillas_uniformes
+      
+      # Total de rejillas en marco original
+      N_rejillas_poblacion <- nrow(mg)
+      
+      # Conteo de locaciones totales y las usadas
+      n_locaciones_marco <- length(unique(mc$LOCACION))
+      n_locaciones_en_muestra <- length(unique(datos_final$LOCACION))
+      
+      # Almacenar todos los datos clave
+      datos_clave <- list(
+        # Primera etapa - Selección de celdas
+        n_rejillas = n,
+        minimo_rejillas = minimo_rejillas,
+        l_max = l_max,
+        l_min = l_min,
+        l = l,
+        n_locaciones_marco = n_locaciones_marco,
+        n_locaciones_muestra = n_locaciones_en_muestra,
+        celdas_asignadas = celdas_asignadas,
+        celdas_restantes = celdas_restantes,
+        
+        # Segunda etapa - Selección de rejillas
+        n_celdas_seleccionadas = n_celdas_seleccionadas,
+        rejillas_uniformes = rejillas_uniformes,
+        rejillas_proporcionales = rejillas_proporcionales,
+        rejillas_asignadas = rejillas_asignadas,
+        N_rejillas_poblacion = N_rejillas_poblacion,
+        
+        # Resumen final
+        n_locaciones_final = length(unique(datos_final$LOCACION)),
+        n_celdas_final = length(unique(datos_final$COD_CELDA)),
+        n_rejillas_final = length(unique(datos_final$COD_GRILLA)),
+        
+        # Fecha de ejecución
+        fecha_muestreo = format(Sys.Date(), "%d/%m/%Y")
+      )
+      
+      datos_clave_muestreo(datos_clave)
       
       showNotification("Muestreo Bietápico completado exitosamente.", type = "message")
       
@@ -4180,6 +4291,157 @@ server <- function(input, output, session) {
     content = function(file) {
       req(conteo_rejillas_por_locacion())
       openxlsx::write.xlsx(conteo_rejillas_por_locacion(), file)
+    }
+  )
+  
+  # ========================================================================== #
+  # OUTPUTS PARA DATOS CLAVE DEL ACTA/INFORME
+  # ========================================================================== #
+  
+  # Indicador de disponibilidad de datos clave
+  output$datos_clave_disponible <- reactive({
+    !is.null(datos_clave_muestreo())
+  })
+  outputOptions(output, "datos_clave_disponible", suspendWhenHidden = FALSE)
+  
+  # Mensaje informativo sobre disponibilidad
+  output$info_datos_clave_disponibles <- renderUI({
+    if (is.null(datos_clave_muestreo())) {
+      div(class = "alert alert-warning",
+        h4("⚠️ Datos no disponibles"),
+        p("Debe ejecutar primero el ", tags$b("Muestreo Bietápico"), " en la columna izquierda para generar los datos clave.")
+      )
+    } else {
+      div(class = "alert alert-success",
+        h4("✅ Datos clave generados exitosamente"),
+        p("El texto markdown ha sido generado con los datos del muestreo ejecutado el ", 
+          tags$b(datos_clave_muestreo()$fecha_muestreo), ".")
+      )
+    }
+  })
+  
+  # Generar texto markdown con datos clave
+  output$texto_datos_clave_markdown <- renderUI({
+    req(datos_clave_muestreo())
+    
+    dk <- datos_clave_muestreo()
+    
+    # Generar texto markdown siguiendo exactamente la plantilla del usuario
+    texto <- paste0(
+      "Primera etapa del muestreo: Selección de celdas\n\n",
+      
+      "1. Se realizó la repartición proporcional de la cantidad de celdas a muestrear por locación se hizo asegurando el mínimo de una celda seleccionada por locación. Luego de ello, se aplicó un algoritmo simple para identificar el n muestral de celdas óptimo, con redondeo hacia abajo: se calculó el valor máximo de celdas que se pueden muestrear considerando el criterio de que cada celda tenga tres rejillas:\n\n",
+      
+      "   celdas_max = n / 3 = ", dk$n_rejillas, " / 3 = ", round(dk$l_max, 2), " = ", dk$l_max, " celdas\n\n",
+      
+      "2. Luego, el mínimo de celdas a muestrear, considerando el criterio de que se muestre al menos una celda por locación, siendo ", dk$n_locaciones_marco, " locaciones",
+      if (dk$n_locaciones_marco != dk$n_locaciones_muestra) {
+        paste0(". No obstante, algunas locaciones fueron descartadas por motivos operativos. En consecuencia, para efectos prácticos en los cálculos, se consideraron ", dk$n_locaciones_muestra, " locaciones")
+      } else {
+        ""
+      },
+      ":\n\n",
+      
+      "   celdas_min = ", dk$l_min, " celdas\n\n",
+      
+      "3. Finalmente, se obtuvo la mediana, que para este caso es igual que el promedio, de esos dos valores:\n\n",
+      
+      "   l = mediana(", dk$l_min, ", ", dk$l_max, ") = ", dk$l, " celdas\n\n",
+      
+      "4. A cada una de las ", dk$n_locaciones_muestra, " locaciones se le asignó inicialmente una celda. Luego, las ", dk$celdas_restantes, " celdas restantes se distribuyeron proporcionalmente según la cantidad total de celdas que tiene cada locación. Es decir, las locaciones con más celdas recibieron una mayor parte de la muestra adicional. El cálculo se realizó de la siguiente manera: primero, se determinó qué proporción del total de celdas representa cada locación (un valor entre 0 y 1). Luego, esa proporción se aplicó a las ", dk$celdas_restantes, " celdas restantes para calcular cuántas celdas adicionales le correspondían a cada una.\n\n",
+      
+      "5. Teniendo el número exacto de celdas a muestrear que cada locación debe tener, se empleó el algoritmo S.piPS del paquete TeachingSampling en R (Rojas, 2020), garantizando una selección probabilística. Esta función seleccionó aleatoriamente, con probabilidad igual para todos los elementos a ser muestreados, los códigos de las celdas del marco muestral que formarán parte de la muestra.\n\n",
+      
+      "Segunda etapa del muestreo: Selección de rejillas dentro de las celdas seleccionadas\n\n",
+      
+      "6. La cantidad de rejillas a muestrear dentro de las celdas seleccionadas fue calculada anteriormente como \"n\" muestral: ", dk$n_rejillas, " rejillas a seleccionar. Para la repartición, se aplicó el criterio de asignar ", dk$minimo_rejillas, " rejillas. Considerando que son ", dk$n_celdas_seleccionadas, " celdas, el total de celdas a repartir uniformemente fue de ", dk$rejillas_uniformes, ". Las restantes ", dk$rejillas_proporcionales, " se asignaron con repartición proporcional a la cantidad de rejillas de cada celda. Celdas con mayor cantidad de rejillas recibieron mayor parte de la muestra de rejillas.\n\n",
+      
+      "7. Tras conocer el número de rejillas exacto que cada celda muestreada debe tener, se aplicó el mismo principio de muestreo: muestreo aleatorio de las rejillas con el algoritmo S.piPS del paquete TeachingSampling en R (Rojas, 2020). Nuevamente, la función seleccionó aleatoriamente, con probabilidad igual para todos los elementos a ser muestreados, los códigos de las rejillas del marco muestral que formarán parte de la muestra.\n\n",
+      
+      "8. La muestra, consistente de los códigos de las ", dk$n_rejillas_final, " rejillas, y sus respectivos códigos de celdas y locación a las que pertenecen, fue exportada en formato Excel para su procesamiento posterior.\n\n",
+      
+      "9. En adición se añadieron treinta y siete (37) rejillas en diecisiete (17) locaciones a juicio de experto a fin de tener una muestra representativa de las celdas evaluadas. Por lo que finalmente el número total de puntos de muestreo establecidos fue de quinientos sesenta y dos (562) rejillas.\n\n",
+      
+      "---\n\n",
+      "RESUMEN EJECUTIVO\n\n",
+      "- Población total (N): ", format(dk$N_rejillas_poblacion, big.mark = ","), " rejillas\n",
+      "- Muestra calculada (n): ", dk$n_rejillas, " rejillas\n",
+      "- Locaciones en el marco: ", dk$n_locaciones_marco, "\n",
+      "- Locaciones consideradas para el muestreo: ", dk$n_locaciones_muestra, "\n",
+      "- Celdas seleccionadas (l): ", dk$n_celdas_final, "\n",
+      "- Tasa de muestreo: ", round(dk$n_rejillas / dk$N_rejillas_poblacion * 100, 2), "%\n\n",
+      
+      "---\n",
+      "*Documento generado automáticamente el ", format(Sys.time(), "%d/%m/%Y %H:%M:%S"), "*"
+    )
+    
+    # Retornar como HTML con formato pre
+    tags$pre(
+      style = "margin: 0; padding: 0; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; word-wrap: break-word;",
+      texto
+    )
+  })
+  
+  # Handler de descarga del texto markdown
+  output$descargar_texto_acta_btn <- downloadHandler(
+    filename = function() {
+      paste0("Datos_Clave_Muestreo_Bietapico-", format(Sys.Date(), "%Y%m%d"), ".txt")
+    },
+    content = function(file) {
+      req(datos_clave_muestreo())
+      
+      dk <- datos_clave_muestreo()
+      
+      # Generar texto siguiendo exactamente la plantilla del usuario
+      texto <- paste0(
+        "Primera etapa del muestreo: Selección de celdas\n\n",
+        
+        "1. Se realizó la repartición proporcional de la cantidad de celdas a muestrear por locación se hizo asegurando el mínimo de una celda seleccionada por locación. Luego de ello, se aplicó un algoritmo simple para identificar el n muestral de celdas óptimo, con redondeo hacia abajo: se calculó el valor máximo de celdas que se pueden muestrear considerando el criterio de que cada celda tenga tres rejillas:\n\n",
+        
+        "   celdas_max = n / 3 = ", dk$n_rejillas, " / 3 = ", round(dk$l_max, 2), " = ", dk$l_max, " celdas\n\n",
+        
+        "2. Luego, el mínimo de celdas a muestrear, considerando el criterio de que se muestre al menos una celda por locación, siendo ", dk$n_locaciones_marco, " locaciones",
+        if (dk$n_locaciones_marco != dk$n_locaciones_muestra) {
+          paste0(". No obstante, algunas locaciones fueron descartadas por motivos operativos. En consecuencia, para efectos prácticos en los cálculos, se consideraron ", dk$n_locaciones_muestra, " locaciones")
+        } else {
+          ""
+        },
+        ":\n\n",
+        
+        "   celdas_min = ", dk$l_min, " celdas\n\n",
+        
+        "3. Finalmente, se obtuvo la mediana, que para este caso es igual que el promedio, de esos dos valores:\n\n",
+        
+        "   l = mediana(", dk$l_min, ", ", dk$l_max, ") = ", dk$l, " celdas\n\n",
+        
+        "4. A cada una de las ", dk$n_locaciones_muestra, " locaciones se le asignó inicialmente una celda. Luego, las ", dk$celdas_restantes, " celdas restantes se distribuyeron proporcionalmente según la cantidad total de celdas que tiene cada locación. Es decir, las locaciones con más celdas recibieron una mayor parte de la muestra adicional. El cálculo se realizó de la siguiente manera: primero, se determinó qué proporción del total de celdas representa cada locación (un valor entre 0 y 1). Luego, esa proporción se aplicó a las ", dk$celdas_restantes, " celdas restantes para calcular cuántas celdas adicionales le correspondían a cada una.\n\n",
+        
+        "5. Teniendo el número exacto de celdas a muestrear que cada locación debe tener, se empleó el algoritmo S.piPS del paquete TeachingSampling en R (Rojas, 2020), garantizando una selección probabilística. Esta función seleccionó aleatoriamente, con probabilidad igual para todos los elementos a ser muestreados, los códigos de las celdas del marco muestral que formarán parte de la muestra.\n\n",
+        
+        "Segunda etapa del muestreo: Selección de rejillas dentro de las celdas seleccionadas\n\n",
+        
+        "6. La cantidad de rejillas a muestrear dentro de las celdas seleccionadas fue calculada anteriormente como \"n\" muestral: ", dk$n_rejillas, " rejillas a seleccionar. Para la repartición, se aplicó el criterio de asignar ", dk$minimo_rejillas, " rejillas. Considerando que son ", dk$n_celdas_seleccionadas, " celdas, el total de celdas a repartir uniformemente fue de ", dk$rejillas_uniformes, ". Las restantes ", dk$rejillas_proporcionales, " se asignaron con repartición proporcional a la cantidad de rejillas de cada celda. Celdas con mayor cantidad de rejillas recibieron mayor parte de la muestra de rejillas.\n\n",
+        
+        "7. Tras conocer el número de rejillas exacto que cada celda muestreada debe tener, se aplicó el mismo principio de muestreo: muestreo aleatorio de las rejillas con el algoritmo S.piPS del paquete TeachingSampling en R (Rojas, 2020). Nuevamente, la función seleccionó aleatoriamente, con probabilidad igual para todos los elementos a ser muestreados, los códigos de las rejillas del marco muestral que formarán parte de la muestra.\n\n",
+        
+        "8. La muestra, consistente de los códigos de las ", dk$n_rejillas_final, " rejillas, y sus respectivos códigos de celdas y locación a las que pertenecen, fue exportada en formato Excel para su procesamiento posterior.\n\n",
+        
+        "9. En adición se añadieron treinta y siete (37) rejillas en diecisiete (17) locaciones a juicio de experto a fin de tener una muestra representativa de las celdas evaluadas. Por lo que finalmente el número total de puntos de muestreo establecidos fue de quinientos sesenta y dos (562) rejillas.\n\n",
+        
+        "---\n\n",
+        "RESUMEN EJECUTIVO\n\n",
+        "- Población total (N): ", format(dk$N_rejillas_poblacion, big.mark = ","), " rejillas\n",
+        "- Muestra calculada (n): ", dk$n_rejillas, " rejillas\n",
+        "- Locaciones en el marco: ", dk$n_locaciones_marco, "\n",
+        "- Locaciones consideradas para el muestreo: ", dk$n_locaciones_muestra, "\n",
+        "- Celdas seleccionadas (l): ", dk$n_celdas_final, "\n",
+        "- Tasa de muestreo: ", round(dk$n_rejillas / dk$N_rejillas_poblacion * 100, 2), "%\n\n",
+        
+        "---\n",
+        "*Documento generado automáticamente el ", format(Sys.time(), "%d/%m/%Y %H:%M:%S"), "*"
+      )
+      
+      writeLines(texto, file, useBytes = TRUE)
     }
   )
   
