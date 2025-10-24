@@ -4,7 +4,7 @@
 packages <- c(
   "shiny", "shinydashboard", "readxl", "DT", "dplyr", 
   "TeachingSampling", "dbscan", "purrr", "openxlsx", "sf",
-  "colourpicker", "uuid"
+  "colourpicker", "uuid", "shinyjs", "jsonlite"
 )
 
 # Cargar todos los paquetes requeridos
@@ -47,6 +47,7 @@ tryCatch({
 ui <- navbarPage(
   title = tagList("Diseño Bietápico"),
   header = tagList(
+    shinyjs::useShinyjs(),
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "styles_v2.css"),
       # Agregar fuente Roboto desde Google Fonts
@@ -563,7 +564,7 @@ ui <- navbarPage(
                                            )
                                          )
                                 ),
-                                tabPanel("Datos clave para el acta/informe",
+                                tabPanel("Texto para el acta/informe",
                                          h3("📊 Información para Actas e Informes", class = "fade-in"),
                                          div(class = "alert alert-info",
                                            h4("ℹ️ Sobre esta sección"),
@@ -587,7 +588,7 @@ ui <- navbarPage(
                                                             tags$style(HTML("
                                                               #copiar_texto_btn { margin-right: 5px; }
                                                             ")),
-                                                            downloadButton("descargar_texto_acta_btn", "💾 Descargar .md", class = "btn-success btn-sm")
+                                                            downloadButton("descargar_texto_acta_btn", "💾 Descargar .txt", class = "btn-success btn-sm")
                                                           )
                                                         ),
                                                         div(style = "background-color: white; padding: 15px; border-radius: 4px; max-height: 600px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; border: 1px solid #ccc;",
@@ -1231,27 +1232,92 @@ ui <- navbarPage(
                                        )
                                 )
                               )
-                     ) 
-                    )
-             )
-           )
-  ),
-  
-  # Pestaña de Resumen de Texto (antes de Errores)
-  tabPanel("📄 Texto para el Acta",
-           fluidRow(
-             column(width = 12,
-                    div(class = "card fade-in",
-                        h3("Generar texto para el Acta"),
-                        p("Este texto utiliza un formato fijo y reemplaza automáticamente los valores dinámicos del área de rejilla, el total de rejillas del marco final y el número de locaciones evaluadas."),
-                        actionButton("generar_resumen_btn", "Generar resumen", class = "btn-primary"),
-                        tags$hr(),
-                        h4("Texto generado:"),
-                        div(style = "white-space: pre-wrap;",
-                            verbatimTextOutput("resumen_texto")
-                        ),
-                        tags$br(),
-                        downloadButton("descargar_resumen_btn", "Descargar (.txt)", class = "btn-success")
+                     ),
+                     
+                     # ========== NUEVA PESTAÑA: TEXTO PARA LAS CONCLUSIONES ==========
+                     tabPanel("📝 Texto para las conclusiones",
+                              h3("Texto para Conclusiones de Informe Técnico", class = "fade-in"),
+                              
+                              div(class = "alert alert-info",
+                                h4("ℹ️ Información sobre esta sección"),
+                                p("Esta sección genera automáticamente el texto de conclusiones técnicas basado en los resultados del análisis de la Fase 5."),
+                                p(tags$b("Requisito:"), " Debe completar el análisis de resultados de laboratorio primero (pestaña ", tags$code("5. Análisis de Resultados"), ")."),
+                                p(tags$b("Nota:"), " Complete los campos de información complementaria para personalizar el texto generado.")
+                              ),
+                              
+                              fluidRow(
+                                # Columna izquierda: Inputs de información complementaria
+                                column(width = 4,
+                                       div(class = "card fade-in",
+                                           h4("📋 Información Complementaria", style = "margin-top: 0;"),
+                                           p("Complete los siguientes campos para personalizar el texto:", 
+                                             style = "font-size: 0.9em; color: #666;"),
+                                           
+                                           textInput("nombre_lote_conclusiones", 
+                                                    "Nombre del Lote:",
+                                                    value = "Lote X",
+                                                    placeholder = "Ej: Lote 192"),
+                                           
+                                           textInput("nombre_empresa_conclusiones", 
+                                                    "Nombre de la Empresa:",
+                                                    value = "CNPC",
+                                                    placeholder = "Ej: CNPC Perú"),
+                                           
+                                           numericInput("area_grilla_conclusiones", 
+                                                       "Área de cada grilla (m²):",
+                                                       value = 5,
+                                                       min = 1,
+                                                       step = 0.01),
+                                           
+                                           numericInput("lado_grilla_conclusiones", 
+                                                       "Lado de la grilla (m):",
+                                                       value = 2.236,
+                                                       min = 0.1,
+                                                       step = 0.001),
+                                           
+                                           tags$hr(),
+                                           tags$div(style = "background-color: #f0f8ff; padding: 10px; border-radius: 4px; border-left: 4px solid #2196f3;",
+                                             tags$h5("📐 Columnas de Área en Shapefiles", style = "margin-top: 0; color: #2196f3;"),
+                                             tags$p("Seleccione las columnas que contienen el área (m²):", style = "font-size: 0.85em; margin-bottom: 10px;"),
+                                             uiOutput("selector_col_area_grillas"),
+                                             uiOutput("selector_col_area_celdas")
+                                           ),
+                                           
+                                           tags$hr(),
+                                           
+                                           actionButton("generar_texto_conclusiones_btn",
+                                                       "🔄 Generar Texto de Conclusiones",
+                                                       class = "btn-primary btn-block",
+                                                       style = "font-weight: bold;"),
+                                           
+                                           conditionalPanel(
+                                             condition = "output.texto_conclusiones_disponible",
+                                             tags$br(),
+                                             actionButton("copiar_texto_conclusiones_btn",
+                                                         "📋 Copiar al Portapapeles",
+                                                         class = "btn-info btn-block",
+                                                         style = "font-weight: bold;"),
+                                             tags$br(),
+                                             downloadButton("descargar_texto_conclusiones_btn",
+                                                           "📥 Descargar Texto (.txt)",
+                                                           class = "btn-success btn-block")
+                                           )
+                                       )
+                                ),
+                                
+                                # Columna derecha: Texto generado
+                                column(width = 8,
+                                       div(class = "card fade-in",
+                                           h4("📄 Texto Generado", style = "margin-top: 0;"),
+                                           uiOutput("info_texto_conclusiones_disponible"),
+                                           tags$hr(),
+                                           div(style = "max-height: 700px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; background-color: #f9f9f9; border-radius: 4px;",
+                                               uiOutput("texto_conclusiones_display")
+                                           )
+                                       )
+                                )
+                              )
+                     )
                     )
              )
            )
@@ -1334,9 +1400,6 @@ server <- function(input, output, session) {
   # Variables reactivas - Fase 4 (Pozos de referencia)
   pozos_referencia <- reactiveVal(NULL)
   datos_finales_con_distancias <- reactiveVal(NULL)
-
-  # Variable reactiva - Resumen de Texto
-  texto_resumen <- reactiveVal("")
   
   # Sistema de manejo de errores
   registro_errores_lista <- reactiveVal(list())
@@ -3820,96 +3883,6 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================ #
-  # GENERACIÓN DE RESUMEN DE TEXTO                                              #
-  # ============================================================================ #
-  observeEvent(input$generar_resumen_btn, {
-    tryCatch({
-      req(a_rejilla(), marco_grillas())
-      
-      # Datos base
-      area_rej <- a_rejilla()
-      mg <- marco_grillas()
-      mc_fil <- marco_celdas_filtrado()
-      
-      # Locaciones evaluadas (preferir conteo_locaciones si existe)
-      n_loc <- NA_integer_
-      if (!is.null(conteo_locaciones())) {
-        n_loc <- nrow(conteo_locaciones())
-      } else if (!is.null(mc_fil)) {
-        n_loc <- length(unique(mc_fil$LOCACION))
-      } else {
-        n_loc <- NA_integer_
-      }
-      
-      # Marco final de grillas: restringir a celdas filtradas si existen
-      total_rejillas_final <- NA_integer_
-      if (!is.null(mc_fil)) {
-        # Alinear tipos y limpiar espacios/mayúsculas para evitar conteos incorrectos
-        ids_celdas_final <- unique(toupper(trimws(as.character(mc_fil$COD_CELDA))))
-        mg_ids <- toupper(trimws(as.character(mg$COD_CELDA)))
-        total_rejillas_final <- sum(mg_ids %in% ids_celdas_final, na.rm = TRUE)
-        # Fallback si por alguna razón el conteo sale 0
-        if (total_rejillas_final == 0 && !is.null(parametros_calculo())) {
-          total_rejillas_final <- parametros_calculo()$N
-        }
-      } else {
-        total_rejillas_final <- nrow(mg)
-      }
-      
-      # Formateo de valores
-      fmt_num <- function(x) format(x, big.mark = ",", decimal.mark = ".", scientific = FALSE)
-      fmt_area <- function(x) paste0(gsub("\\.00$", "", format(round(x, 2), nsmall = 2, trim = TRUE)), " m²")
-      
-      area_txt <- fmt_area(area_rej)
-      rejillas_txt <- fmt_num(total_rejillas_final)
-      locaciones_txt <- fmt_num(n_loc)
-      
-      # Plantilla de texto del usuario con placeholders
-      template <- paste0(
-        "Para este expediente, la grilla base utilizada fue de {{AREA}}. ",
-        "Sin embargo, debido a los recortes generados durante el procesamiento en el SIG, se obtuvieron áreas de dicho tamaño junto con zonas irregulares de menor superficie. ",
-        "Cabe señalar que las grillas con un área inferior a 2 m² no son operativamente susceptibles de ser muestreadas, por lo que fueron descartadas durante la elaboración del marco muestral. ",
-        "El total restante conformó un marco muestral de {{TOTAL_REJILLAS}}.\n",
-        "La distribución de los puntos de muestreo se realizó mediante un diseño estadístico bietápico por conglomerados. ",
-        "En la primera etapa, se seleccionaron aleatoriamente las celdas dentro de cada locación, asegurando al menos una celda por locación y una distribución proporcional. ",
-        "En la segunda etapa, se eligieron aleatoriamente las rejillas dentro de las celdas seleccionadas, asignando inicialmente tres rejillas por celda y ajustando dicha asignación de forma proporcional según la disponibilidad de rejillas. ",
-        "Este enfoque permitió capturar la complejidad espacial del fenómeno y asegurar la eficiencia estadística del estudio. ",
-        "Los puntos de muestreo seleccionados se distribuyeron en las {{N_LOCACIONES}} locaciones del Lote X, según el siguiente detalle:"
-      )
-      
-      # Reemplazos de placeholders
-      texto <- template
-      texto <- gsub("{{AREA}}", area_txt, texto, fixed = TRUE)
-      texto <- gsub("{{TOTAL_REJILLAS}}", paste0(rejillas_txt, " rejillas"), texto, fixed = TRUE)
-      texto <- gsub("{{N_LOCACIONES}}", locaciones_txt, texto, fixed = TRUE)
-      
-      texto_resumen(texto)
-      showNotification("Texto generado para el Acta.", type = "message")
-    }, error = function(e) {
-      registrar_error(e, "Generación de Resumen de Texto")
-      showNotification(paste("No fue posible generar el resumen:", conditionMessage(e)), type = "error")
-    })
-  })
-  
-  output$resumen_texto <- renderText({
-    req(texto_resumen())
-    texto_resumen()
-  })
-  
-  output$descargar_resumen_btn <- downloadHandler(
-    filename = function() {
-      paste("Resumen_Muestreo-", Sys.Date(), ".txt", sep = "")
-    },
-    content = function(file) {
-      txt <- texto_resumen()
-      if (is.null(txt) || identical(txt, "")) {
-        txt <- "No se ha generado ningún resumen aún."
-      }
-      writeLines(txt, file)
-    }
-  )
-  
-  # ============================================================================ #
   # FASE 4: MUESTREO BIETÁPICO                                                #
   # ============================================================================ #
   
@@ -4858,6 +4831,8 @@ server <- function(input, output, session) {
   shp_celdas_data <- reactiveVal(NULL)
   columnas_shp_grillas <- reactiveVal(NULL)
   columnas_shp_celdas <- reactiveVal(NULL)
+  col_area_grillas_detectada <- reactiveVal(NULL)
+  col_area_celdas_detectada <- reactiveVal(NULL)
   
   # Variables reactivas para mapeo de columnas de archivos Excel
   columnas_resultados_lab <- reactiveVal(NULL)
@@ -5787,6 +5762,17 @@ server <- function(input, output, session) {
           )
         }
         
+        # Detectar columna de área automáticamente
+        cols_upper <- toupper(cols)
+        patrones_area <- c("SHAPE_AREA", "AREA", "SUPERFICIE", "HECTARES", "M2", "METERS_SQ")
+        col_area_idx <- which(cols_upper %in% patrones_area)
+        if (length(col_area_idx) == 0) {
+          # Buscar por patrón parcial
+          col_area_idx <- which(sapply(patrones_area, function(p) any(grepl(p, cols_upper))))
+        }
+        col_area_sugerida <- if (length(col_area_idx) > 0) cols[col_area_idx[1]] else NULL
+        col_area_grillas_detectada(col_area_sugerida)
+        
         shp_grillas_data(shp)
         columnas_shp_grillas(cols)
         
@@ -5829,6 +5815,17 @@ server <- function(input, output, session) {
             duration = 10
           )
         }
+        
+        # Detectar columna de área automáticamente
+        cols_upper <- toupper(cols)
+        patrones_area <- c("SHAPE_AREA", "AREA", "SUPERFICIE", "HECTARES", "M2", "METERS_SQ")
+        col_area_idx <- which(cols_upper %in% patrones_area)
+        if (length(col_area_idx) == 0) {
+          # Buscar por patrón parcial
+          col_area_idx <- which(sapply(patrones_area, function(p) any(grepl(p, cols_upper))))
+        }
+        col_area_sugerida <- if (length(col_area_idx) > 0) cols[col_area_idx[1]] else NULL
+        col_area_celdas_detectada(col_area_sugerida)
         
         shp_celdas_data(shp)
         columnas_shp_celdas(cols)

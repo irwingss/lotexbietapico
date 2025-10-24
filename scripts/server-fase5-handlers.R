@@ -1929,26 +1929,211 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
       
       tiene_datos <- FALSE
       
-      # ========== Hoja 1: VÉRTICES DE GRILLAS (CON JERARQUÍA) ==========
-      # Solo grillas que NO pertenecen a celdas o locaciones contaminadas
+      # ========== Hoja 1: VÉRTICES DE GRILLAS (CON JERARQUÍA) - FORMATO COMPLETO ==========
       if (!is.null(vertices_grillas_unificado()) && nrow(vertices_grillas_unificado()) > 0) {
-        vertices_grillas <- vertices_grillas_unificado() %>%
-          select(criterio_contaminacion, COD_GRILLA, LOCACION, AREA, ESTE, NORTE, everything())
         
+        # Preparar datos ordenados por LOCACION y codigo_punto
+        datos_grillas <- vertices_grillas_unificado() %>%
+          select(LOCACION, codigo_punto, COD_GRILLA, AREA, tph, ESTE, NORTE) %>%
+          arrange(LOCACION, codigo_punto, ESTE, NORTE)
+        
+        # Agregar columna de número de vértice
+        datos_grillas <- datos_grillas %>%
+          group_by(LOCACION, codigo_punto) %>%
+          mutate(Vertice = row_number()) %>%
+          ungroup() %>%
+          select(LOCACION, codigo_punto, COD_GRILLA, AREA, tph, Vertice, ESTE, NORTE)
+        
+        # Crear worksheet
         openxlsx::addWorksheet(wb, "Vertices_Grillas")
-        openxlsx::writeData(wb, "Vertices_Grillas", vertices_grillas)
         
-        # Aplicar formato al encabezado
-        header_style <- openxlsx::createStyle(
-          fontSize = 11, 
-          fontColour = "#FFFFFF", 
+        # ========== ENCABEZADOS DE 2 FILAS ==========
+        
+        # Fila 1: Encabezados principales (algunos fusionados)
+        fila1_headers <- c(
+          "Pozo/Locación",
+          "Punto de muestreo que supera el Nivel de Intervención",
+          "Código de la rejilla a la que pertenece",
+          "Área de la rejilla a la que pertenece (m2)",
+          "TPH mg/kg",
+          "Coordenadas de los vértices del perímetro del punto de muestreo que supera el Nivel de Intervención UTM WGS84, Zona 17M",
+          "",  # Fusionado con anterior
+          ""   # Fusionado con anterior
+        )
+        
+        # Fila 2: Sub-encabezados (solo para columnas 6-8)
+        fila2_headers <- c(
+          "",  # Fusionado con fila 1
+          "",  # Fusionado con fila 1
+          "",  # Fusionado con fila 1
+          "",  # Fusionado con fila 1
+          "",  # Fusionado con fila 1
+          "Vértice",
+          "Este",
+          "Norte"
+        )
+        
+        # Escribir encabezados
+        openxlsx::writeData(wb, "Vertices_Grillas", t(fila1_headers), startRow = 1, colNames = FALSE)
+        openxlsx::writeData(wb, "Vertices_Grillas", t(fila2_headers), startRow = 2, colNames = FALSE)
+        
+        # Escribir datos (empezando en fila 3)
+        openxlsx::writeData(wb, "Vertices_Grillas", datos_grillas, startRow = 3, colNames = FALSE)
+        
+        # ========== FUSIONES DE ENCABEZADOS ==========
+        
+        # Fusionar columnas 1-5 en fila 1 y 2 (verticalmente)
+        for (col in 1:5) {
+          openxlsx::mergeCells(wb, "Vertices_Grillas", cols = col, rows = 1:2)
+        }
+        
+        # Fusionar columnas 6-8 en fila 1 (horizontalmente)
+        openxlsx::mergeCells(wb, "Vertices_Grillas", cols = 6:8, rows = 1)
+        
+        # ========== FUSIONES DE DATOS ==========
+        
+        # Calcular rangos de fusión para cada locación y punto
+        datos_con_rangos <- datos_grillas %>%
+          mutate(row_num = row_number() + 2) %>%  # +2 porque empezamos en fila 3
+          group_by(LOCACION) %>%
+          mutate(
+            loc_start = min(row_num),
+            loc_end = max(row_num)
+          ) %>%
+          group_by(LOCACION, codigo_punto) %>%
+          mutate(
+            punto_start = min(row_num),
+            punto_end = max(row_num)
+          ) %>%
+          ungroup()
+        
+        # Fusionar columna 1 (LOCACION) por grupos de locación
+        rangos_locacion <- datos_con_rangos %>%
+          select(LOCACION, loc_start, loc_end) %>%
+          distinct() %>%
+          filter(loc_end > loc_start)  # Solo fusionar si hay más de 1 fila
+        
+        if (nrow(rangos_locacion) > 0) {
+          for (i in 1:nrow(rangos_locacion)) {
+            openxlsx::mergeCells(wb, "Vertices_Grillas", 
+                                cols = 1, 
+                                rows = rangos_locacion$loc_start[i]:rangos_locacion$loc_end[i])
+          }
+        }
+        
+        # Fusionar columnas 2-5 (punto, grilla, area, tph) por grupos de punto
+        rangos_punto <- datos_con_rangos %>%
+          select(LOCACION, codigo_punto, punto_start, punto_end) %>%
+          distinct() %>%
+          filter(punto_end > punto_start)  # Solo fusionar si hay más de 1 vértice
+        
+        if (nrow(rangos_punto) > 0) {
+          for (i in 1:nrow(rangos_punto)) {
+            for (col in 2:5) {
+              openxlsx::mergeCells(wb, "Vertices_Grillas",
+                                  cols = col,
+                                  rows = rangos_punto$punto_start[i]:rangos_punto$punto_end[i])
+            }
+          }
+        }
+        
+        # ========== ESTILOS Y COLORES ==========
+        
+        # Estilo para encabezados principales (fila 1, columnas 1-5 y fusión 6-8)
+        style_header_main <- openxlsx::createStyle(
+          fontSize = 10,
+          fontColour = "#000000",
           halign = "center",
-          fgFill = "#d9534f", 
+          valign = "center",
+          fgFill = "#92D050",
+          border = "TopBottomLeftRight",
+          textDecoration = "bold",
+          wrapText = TRUE
+        )
+        
+        # Estilo para sub-encabezados de coordenadas (fila 2, columnas 6-8)
+        style_header_coords <- openxlsx::createStyle(
+          fontSize = 10,
+          fontColour = "#000000",
+          halign = "center",
+          valign = "center",
+          fgFill = "#C6E0B4",
           border = "TopBottomLeftRight",
           textDecoration = "bold"
         )
-        openxlsx::addStyle(wb, sheet = "Vertices_Grillas", header_style, rows = 1, 
-                          cols = 1:ncol(vertices_grillas), gridExpand = TRUE)
+        
+        # Aplicar estilos a encabezados
+        openxlsx::addStyle(wb, "Vertices_Grillas", style_header_main, rows = 1:2, cols = 1:5, gridExpand = TRUE)
+        openxlsx::addStyle(wb, "Vertices_Grillas", style_header_main, rows = 1, cols = 6:8, gridExpand = TRUE)
+        openxlsx::addStyle(wb, "Vertices_Grillas", style_header_coords, rows = 2, cols = 6:8, gridExpand = TRUE)
+        
+        # Estilo para columna LOCACION (azul claro)
+        style_locacion <- openxlsx::createStyle(
+          fontSize = 10,
+          halign = "center",
+          valign = "center",
+          fgFill = "#D9E1F2",
+          border = "TopBottomLeftRight"
+        )
+        
+        # Estilo para columnas punto, grilla, area (verde oliva)
+        style_punto_grilla <- openxlsx::createStyle(
+          fontSize = 10,
+          halign = "center",
+          valign = "center",
+          fgFill = "#A9D08E",
+          border = "TopBottomLeftRight"
+        )
+        
+        # Estilo para columna TPH (rojo con texto blanco)
+        style_tph <- openxlsx::createStyle(
+          fontSize = 10,
+          fontColour = "#FFFFFF",
+          halign = "center",
+          valign = "center",
+          fgFill = "#FF0000",
+          border = "TopBottomLeftRight",
+          textDecoration = "bold"
+        )
+        
+        # Estilo para columnas de coordenadas (verde claro)
+        style_coords <- openxlsx::createStyle(
+          fontSize = 10,
+          halign = "center",
+          valign = "center",
+          fgFill = "#E2EFDA",
+          border = "TopBottomLeftRight"
+        )
+        
+        # Aplicar estilos a datos
+        num_rows_datos <- nrow(datos_grillas)
+        if (num_rows_datos > 0) {
+          # Columna 1: LOCACION
+          openxlsx::addStyle(wb, "Vertices_Grillas", style_locacion, rows = 3:(3 + num_rows_datos - 1), cols = 1, gridExpand = TRUE)
+          
+          # Columnas 2-4: punto, grilla, area
+          openxlsx::addStyle(wb, "Vertices_Grillas", style_punto_grilla, rows = 3:(3 + num_rows_datos - 1), cols = 2:4, gridExpand = TRUE)
+          
+          # Columna 5: TPH
+          openxlsx::addStyle(wb, "Vertices_Grillas", style_tph, rows = 3:(3 + num_rows_datos - 1), cols = 5, gridExpand = TRUE)
+          
+          # Columnas 6-8: Vértice, Este, Norte
+          openxlsx::addStyle(wb, "Vertices_Grillas", style_coords, rows = 3:(3 + num_rows_datos - 1), cols = 6:8, gridExpand = TRUE)
+        }
+        
+        # ========== AJUSTAR ANCHOS DE COLUMNA ==========
+        openxlsx::setColWidths(wb, "Vertices_Grillas", cols = 1, widths = 15)  # Locación
+        openxlsx::setColWidths(wb, "Vertices_Grillas", cols = 2, widths = 25)  # Punto
+        openxlsx::setColWidths(wb, "Vertices_Grillas", cols = 3, widths = 20)  # Código grilla
+        openxlsx::setColWidths(wb, "Vertices_Grillas", cols = 4, widths = 15)  # Área
+        openxlsx::setColWidths(wb, "Vertices_Grillas", cols = 5, widths = 12)  # TPH
+        openxlsx::setColWidths(wb, "Vertices_Grillas", cols = 6, widths = 10)  # Vértice
+        openxlsx::setColWidths(wb, "Vertices_Grillas", cols = 7, widths = 15)  # Este
+        openxlsx::setColWidths(wb, "Vertices_Grillas", cols = 8, widths = 15)  # Norte
+        
+        # Ajustar altura de filas de encabezado
+        openxlsx::setRowHeights(wb, "Vertices_Grillas", rows = 1, heights = 45)
+        openxlsx::setRowHeights(wb, "Vertices_Grillas", rows = 2, heights = 20)
         
         tiene_datos <- TRUE
       }
@@ -2135,5 +2320,204 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
       cat("Clase:", class(e), "\n")
       print(e)
     })
+  }
+)
+
+# ============================================================================ #
+# TEXTO PARA LAS CONCLUSIONES - Nueva pestaña de Fase 5
+# ============================================================================ #
+
+# Variable reactiva para almacenar el texto generado
+texto_conclusiones_generado <- reactiveVal(NULL)
+
+# Indicador de disponibilidad
+output$texto_conclusiones_disponible <- reactive({
+  !is.null(texto_conclusiones_generado())
+})
+outputOptions(output, "texto_conclusiones_disponible", suspendWhenHidden = FALSE)
+
+# Mensaje informativo sobre disponibilidad
+output$info_texto_conclusiones_disponible <- renderUI({
+  if (is.null(texto_conclusiones_generado())) {
+    div(class = "alert alert-warning",
+      h5("⚠️ Texto no generado"),
+      p("Presione el botón ", tags$b("'Generar Texto de Conclusiones'"), " para crear el documento.")
+    )
+  } else {
+    div(class = "alert alert-success",
+      h5("✅ Texto generado exitosamente"),
+      p("El texto ha sido generado con los datos del análisis. Puede descargarlo usando el botón de la izquierda.")
+    )
+  }
+})
+
+# Outputs para selectores de columna de área en shapefiles
+output$selector_col_area_grillas <- renderUI({
+  if (!is.null(columnas_shp_grillas()) && length(columnas_shp_grillas()) > 0) {
+    cols <- columnas_shp_grillas()
+    col_sugerida <- col_area_grillas_detectada()
+    
+    tagList(
+      selectInput("col_area_grillas_manual",
+                 "Shapefile de Grillas - Columna de Área:",
+                 choices = cols,
+                 selected = if(!is.null(col_sugerida)) col_sugerida else cols[1]),
+      if (!is.null(col_sugerida)) {
+        p(style = "font-size: 0.8em; color: #28a745; margin-top: -10px;",
+          icon("check-circle"), " Detectada automáticamente: ", tags$b(col_sugerida))
+      } else {
+        p(style = "font-size: 0.8em; color: #ff9800; margin-top: -10px;",
+          icon("exclamation-triangle"), " No detectada, seleccione manualmente")
+      }
+    )
+  } else {
+    p(style = "font-size: 0.85em; color: #999; font-style: italic;",
+      "⏳ Cargue el shapefile de grillas en la sección 5C para habilitar")
+  }
+})
+
+output$selector_col_area_celdas <- renderUI({
+  if (!is.null(columnas_shp_celdas()) && length(columnas_shp_celdas()) > 0) {
+    cols <- columnas_shp_celdas()
+    col_sugerida <- col_area_celdas_detectada()
+    
+    tagList(
+      selectInput("col_area_celdas_manual",
+                 "Shapefile de Celdas - Columna de Área:",
+                 choices = cols,
+                 selected = if(!is.null(col_sugerida)) col_sugerida else cols[1]),
+      if (!is.null(col_sugerida)) {
+        p(style = "font-size: 0.8em; color: #28a745; margin-top: -10px;",
+          icon("check-circle"), " Detectada automáticamente: ", tags$b(col_sugerida))
+      } else {
+        p(style = "font-size: 0.8em; color: #ff9800; margin-top: -10px;",
+          icon("exclamation-triangle"), " No detectada, seleccione manualmente")
+      }
+    )
+  } else {
+    p(style = "font-size: 0.85em; color: #999; font-style: italic;",
+      "⏳ Cargue el shapefile de celdas en la sección 5C para habilitar")
+  }
+})
+
+# Handler para generar el texto
+observeEvent(input$generar_texto_conclusiones_btn, {
+  req(muestra_enriquecida(), promedios_celdas_resultado(), promedios_locaciones_resultado())
+  req(input$umbral_tph)
+  
+  tryCatch({
+    showNotification("Generando texto de conclusiones...", type = "message", duration = 3)
+    
+    # Obtener datos
+    muestra <- muestra_enriquecida()
+    celdas <- promedios_celdas_resultado()
+    locaciones <- promedios_locaciones_resultado()
+    umbral <- input$umbral_tph
+    
+    vert_grillas <- vertices_grillas_unificado()
+    vert_celdas <- vertices_celdas_unificado()
+    
+    # Información del usuario
+    nombre_lote <- input$nombre_lote_conclusiones
+    nombre_empresa <- input$nombre_empresa_conclusiones
+    area_grilla <- input$area_grilla_conclusiones
+    lado_grilla <- input$lado_grilla_conclusiones
+    
+    # Obtener shapefiles y columnas de área
+    shp_grillas <- shp_grillas_data()
+    shp_celdas <- shp_celdas_data()
+    col_area_grillas <- input$col_area_grillas_manual
+    col_area_celdas <- input$col_area_celdas_manual
+    
+    # Generar texto usando función auxiliar
+    texto <- generar_texto_conclusiones(
+      muestra = muestra,
+      celdas = celdas,
+      locaciones = locaciones,
+      umbral = umbral,
+      vert_grillas = vert_grillas,
+      vert_celdas = vert_celdas,
+      nombre_lote = nombre_lote,
+      nombre_empresa = nombre_empresa,
+      area_grilla = area_grilla,
+      lado_grilla = lado_grilla,
+      shp_grillas = shp_grillas,
+      shp_celdas = shp_celdas,
+      col_area_grillas = col_area_grillas,
+      col_area_celdas = col_area_celdas
+    )
+    
+    # Guardar el texto generado
+    texto_conclusiones_generado(texto)
+    
+    showNotification("✅ Texto de conclusiones generado exitosamente", type = "message", duration = 5)
+    
+  }, error = function(e) {
+    registrar_error(e$message, "Generación de texto de conclusiones")
+    showNotification(paste("Error al generar texto:", e$message), type = "error", duration = 10)
+  })
+})
+
+# Mostrar el texto generado
+output$texto_conclusiones_display <- renderUI({
+  texto <- texto_conclusiones_generado()
+  
+  if (is.null(texto)) {
+    div(class = "alert alert-secondary",
+      p(style = "text-align: center; color: #999; margin: 50px 0;",
+        "El texto aparecerá aquí una vez que presione el botón 'Generar Texto de Conclusiones'")
+    )
+  } else {
+    tags$pre(
+      style = "margin: 0; padding: 0; font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;",
+      texto
+    )
+  }
+})
+
+# Handler para copiar al portapapeles
+observeEvent(input$copiar_texto_conclusiones_btn, {
+  req(texto_conclusiones_generado())
+  
+  tryCatch({
+    # Crear un textarea temporal con el texto
+    texto <- texto_conclusiones_generado()
+    
+    # Usar JavaScript para copiar al portapapeles
+    js_code <- sprintf(
+      "
+      var textarea = document.createElement('textarea');
+      textarea.value = %s;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = 0;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      ",
+      jsonlite::toJSON(texto, auto_unbox = TRUE)
+    )
+    
+    shinyjs::runjs(js_code)
+    
+    showNotification("✅ Texto copiado al portapapeles exitosamente", 
+                     type = "message", 
+                     duration = 3)
+    
+  }, error = function(e) {
+    showNotification(paste("Error al copiar:", e$message), 
+                     type = "warning", 
+                     duration = 5)
+  })
+})
+
+# Handler de descarga
+output$descargar_texto_conclusiones_btn <- downloadHandler(
+  filename = function() {
+    paste0("Texto_Conclusiones_", input$nombre_lote_conclusiones, "_", format(Sys.Date(), "%Y%m%d"), ".txt")
+  },
+  content = function(file) {
+    req(texto_conclusiones_generado())
+    writeLines(texto_conclusiones_generado(), file, useBytes = TRUE)
   }
 )
