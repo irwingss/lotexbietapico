@@ -713,7 +713,8 @@ generar_vertices_celdas <- function(shp_marco_celdas, Promedio_celdas_final,
     transmute(
       COD_UNIC = to_key(.data[[shp_code_col]]),
       LOCACION, 
-      AREA
+      AREA,
+      COD_PLANO = if("COD_PLANO" %in% names(.)) COD_PLANO else NA_character_
     )
   
   # Promedio TPH por celda

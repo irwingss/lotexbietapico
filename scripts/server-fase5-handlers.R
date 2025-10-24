@@ -561,6 +561,20 @@ observeEvent(input$generar_vertices_btn, {
         
         superan_grilla <- datos_prep %>% filter(tph > umbral) %>% pull(grilla) %>% unique()
         
+        # ========== DEBUG: VERIFICAR CÓDIGOS DE GRILLA ==========
+        cat("\n==================== DEBUG CÓDIGOS DE GRILLA ====================\n")
+        cat("Columna seleccionada en shapefile:", col_grilla_shp, "\n")
+        cat("\nPrimeros 10 códigos ÚNICOS en shapefile (", col_grilla_shp, "):\n", sep = "")
+        print(head(unique(shp_grillas[[col_grilla_shp]]), 10))
+        cat("\nPrimeros 10 códigos ÚNICOS en muestra (grilla de muestra_enriquecida):\n")
+        print(head(unique(datos_prep$grilla), 10))
+        cat("\nGrillas que superan umbral TPH (", umbral, "):\n", sep = "")
+        cat("Total:", length(superan_grilla), "\n")
+        print(head(superan_grilla, 20))
+        cat("\nCódigos en shapefile después de crear COD_GRILLA:\n")
+        print(head(unique(shp_grillas$COD_GRILLA), 10))
+        cat("==================================================================\n\n")
+        
         if (length(superan_grilla) > 0) {
           # Filtrar shapefile por las grillas contaminadas
           shp_grillas_filtrado <- shp_grillas %>% filter(COD_GRILLA %in% superan_grilla)
@@ -582,15 +596,26 @@ observeEvent(input$generar_vertices_btn, {
       col_celda_shp <- input$col_celda_shp
       col_locacion_shp <- input$col_locacion_celda_shp
       col_area_shp <- input$col_area_celda_shp
+      col_cod_plano_shp <- input$col_cod_plano_celda_shp
       prom_celdas <- promedios_celdas_resultado()
       
-      # Crear columnas requeridas en shapefile (LOCACION y AREA)
+      # Crear columnas requeridas en shapefile (LOCACION, AREA y COD_PLANO si existe)
       # Nota: COD_UNIC se crea dinámicamente en generar_vertices_celdas
-      shp_celdas <- shp_celdas %>%
-        mutate(
-          LOCACION = .data[[col_locacion_shp]],
-          AREA = .data[[col_area_shp]]
-        )
+      if (!is.null(col_cod_plano_shp) && col_cod_plano_shp != "") {
+        shp_celdas <- shp_celdas %>%
+          mutate(
+            LOCACION = .data[[col_locacion_shp]],
+            AREA = .data[[col_area_shp]],
+            COD_PLANO = .data[[col_cod_plano_shp]]
+          )
+      } else {
+        shp_celdas <- shp_celdas %>%
+          mutate(
+            LOCACION = .data[[col_locacion_shp]],
+            AREA = .data[[col_area_shp]],
+            COD_PLANO = NA_character_  # Si no hay columna, usar NA
+          )
+      }
       
       # Preparar datos con columnas en minúscula (requeridas por generar_vertices_celdas)
       datos_prep <- datos
@@ -2138,56 +2163,485 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
         tiene_datos <- TRUE
       }
       
-      # ========== Hoja 2: VÉRTICES DE CELDAS (CON JERARQUÍA) ==========
-      # Solo celdas que NO pertenecen a locaciones contaminadas
+      # ========== Hoja 2: VÉRTICES DE CELDAS (CON JERARQUÍA) - FORMATO COMPLETO ==========
       if (!is.null(vertices_celdas_unificado()) && nrow(vertices_celdas_unificado()) > 0) {
-        vertices_celdas <- vertices_celdas_unificado() %>%
-          select(criterio_contaminacion, COD_UNIC, LOCACION, AREA, ESTE, NORTE, everything())
         
+        # Preparar datos ordenados por LOCACION y COD_UNIC
+        datos_celdas <- vertices_celdas_unificado() %>%
+          select(LOCACION, COD_UNIC, puntos_superan, AREA, ESTE, NORTE, tph_celda, prop_superan_pct) %>%
+          arrange(LOCACION, COD_UNIC, ESTE, NORTE)
+        
+        # Agregar columna de número de vértice
+        datos_celdas <- datos_celdas %>%
+          group_by(LOCACION, COD_UNIC) %>%
+          mutate(Vertice = row_number()) %>%
+          ungroup() %>%
+          select(LOCACION, COD_UNIC, puntos_superan, AREA, Vertice, ESTE, NORTE, tph_celda, prop_superan_pct)
+        
+        # Crear worksheet
         openxlsx::addWorksheet(wb, "Vertices_Celdas")
-        openxlsx::writeData(wb, "Vertices_Celdas", vertices_celdas)
         
-        # Aplicar formato al encabezado
-        header_style <- openxlsx::createStyle(
-          fontSize = 11, 
-          fontColour = "#FFFFFF", 
+        # ========== ENCABEZADOS DE 2 FILAS ==========
+        
+        # Fila 1: Encabezados principales
+        fila1_headers <- c(
+          "Pozo/Locación",
+          "Celdas contaminadas",
+          "Código de los puntos que superaron el nivel de intervención dentro de la celda",
+          "Área de la celda contaminada",
+          "Coordenadas de los vértices del perímetro del punto de muestreo que supera el Nivel de Intervención UTM WGS84, Zona 17M",
+          "",  # Fusionado con anterior
+          "",  # Fusionado con anterior
+          "TPH mg/kg (Promedio ponderado)",
+          "Proporción de puntos contaminados"
+        )
+        
+        # Fila 2: Sub-encabezados
+        fila2_headers <- c(
+          "",  # Fusionado con fila 1
+          "",  # Fusionado con fila 1
+          "",  # Fusionado con fila 1
+          "",  # Fusionado con fila 1
+          "Vértice",
+          "Este",
+          "Norte",
+          "",  # Fusionado con fila 1
+          ""   # Fusionado con fila 1
+        )
+        
+        # Escribir encabezados
+        openxlsx::writeData(wb, "Vertices_Celdas", t(fila1_headers), startRow = 1, colNames = FALSE)
+        openxlsx::writeData(wb, "Vertices_Celdas", t(fila2_headers), startRow = 2, colNames = FALSE)
+        
+        # Escribir datos (empezando en fila 3)
+        openxlsx::writeData(wb, "Vertices_Celdas", datos_celdas, startRow = 3, colNames = FALSE)
+        
+        # ========== FUSIONES DE ENCABEZADOS ==========
+        
+        # Fusionar columnas 1-4, 8-9 en fila 1 y 2 (verticalmente)
+        for (col in c(1:4, 8:9)) {
+          openxlsx::mergeCells(wb, "Vertices_Celdas", cols = col, rows = 1:2)
+        }
+        
+        # Fusionar columnas 5-7 en fila 1 (horizontalmente)
+        openxlsx::mergeCells(wb, "Vertices_Celdas", cols = 5:7, rows = 1)
+        
+        # ========== FUSIONES DE DATOS ==========
+        
+        # Calcular rangos de fusión para cada locación y celda
+        datos_con_rangos <- datos_celdas %>%
+          mutate(row_num = row_number() + 2) %>%  # +2 porque empezamos en fila 3
+          group_by(LOCACION) %>%
+          mutate(
+            loc_start = min(row_num),
+            loc_end = max(row_num)
+          ) %>%
+          group_by(LOCACION, COD_UNIC) %>%
+          mutate(
+            celda_start = min(row_num),
+            celda_end = max(row_num)
+          ) %>%
+          ungroup()
+        
+        # Fusionar columna 1 (LOCACION) por grupos de locación
+        rangos_locacion <- datos_con_rangos %>%
+          select(LOCACION, loc_start, loc_end) %>%
+          distinct() %>%
+          filter(loc_end > loc_start)
+        
+        if (nrow(rangos_locacion) > 0) {
+          for (i in 1:nrow(rangos_locacion)) {
+            openxlsx::mergeCells(wb, "Vertices_Celdas", 
+                                cols = 1, 
+                                rows = rangos_locacion$loc_start[i]:rangos_locacion$loc_end[i])
+          }
+        }
+        
+        # Fusionar columnas 2-4, 8-9 por grupos de celda
+        rangos_celda <- datos_con_rangos %>%
+          select(LOCACION, COD_UNIC, celda_start, celda_end) %>%
+          distinct() %>%
+          filter(celda_end > celda_start)
+        
+        if (nrow(rangos_celda) > 0) {
+          for (i in 1:nrow(rangos_celda)) {
+            for (col in c(2:4, 8:9)) {
+              openxlsx::mergeCells(wb, "Vertices_Celdas",
+                                  cols = col,
+                                  rows = rangos_celda$celda_start[i]:rangos_celda$celda_end[i])
+            }
+          }
+        }
+        
+        # ========== ESTILOS Y COLORES ==========
+        
+        # Estilo para encabezados principales
+        style_header_main <- openxlsx::createStyle(
+          fontSize = 10,
+          fontColour = "#000000",
           halign = "center",
-          fgFill = "#f0ad4e", 
+          valign = "center",
+          fgFill = "#92D050",
+          border = "TopBottomLeftRight",
+          textDecoration = "bold",
+          wrapText = TRUE
+        )
+        
+        # Estilo para sub-encabezados de coordenadas
+        style_header_coords <- openxlsx::createStyle(
+          fontSize = 10,
+          fontColour = "#000000",
+          halign = "center",
+          valign = "center",
+          fgFill = "#C6E0B4",
           border = "TopBottomLeftRight",
           textDecoration = "bold"
         )
-        openxlsx::addStyle(wb, sheet = "Vertices_Celdas", header_style, rows = 1, 
-                          cols = 1:ncol(vertices_celdas), gridExpand = TRUE)
+        
+        # Aplicar estilos a encabezados
+        openxlsx::addStyle(wb, "Vertices_Celdas", style_header_main, rows = 1:2, cols = c(1:4, 8:9), gridExpand = TRUE)
+        openxlsx::addStyle(wb, "Vertices_Celdas", style_header_main, rows = 1, cols = 5:7, gridExpand = TRUE)
+        openxlsx::addStyle(wb, "Vertices_Celdas", style_header_coords, rows = 2, cols = 5:7, gridExpand = TRUE)
+        
+        # Estilo para columna LOCACION (azul claro)
+        style_locacion <- openxlsx::createStyle(
+          fontSize = 10,
+          halign = "center",
+          valign = "center",
+          fgFill = "#D9E1F2",
+          border = "TopBottomLeftRight"
+        )
+        
+        # Estilo para columna celda (verde claro)
+        style_celda <- openxlsx::createStyle(
+          fontSize = 10,
+          halign = "center",
+          valign = "center",
+          fgFill = "#E2EFDA",
+          border = "TopBottomLeftRight"
+        )
+        
+        # Estilo para puntos superan (blanco)
+        style_puntos <- openxlsx::createStyle(
+          fontSize = 10,
+          halign = "center",
+          valign = "center",
+          fgFill = "#FFFFFF",
+          border = "TopBottomLeftRight",
+          wrapText = TRUE
+        )
+        
+        # Estilo para área (verde claro)
+        style_area <- openxlsx::createStyle(
+          fontSize = 10,
+          halign = "center",
+          valign = "center",
+          fgFill = "#E2EFDA",
+          border = "TopBottomLeftRight"
+        )
+        
+        # Estilo para coordenadas (blanco)
+        style_coords <- openxlsx::createStyle(
+          fontSize = 10,
+          halign = "center",
+          valign = "center",
+          fgFill = "#FFFFFF",
+          border = "TopBottomLeftRight"
+        )
+        
+        # Estilo para TPH (rojo con texto blanco)
+        style_tph <- openxlsx::createStyle(
+          fontSize = 10,
+          fontColour = "#FFFFFF",
+          halign = "center",
+          valign = "center",
+          fgFill = "#FF0000",
+          border = "TopBottomLeftRight",
+          textDecoration = "bold"
+        )
+        
+        # Estilo para proporción (verde claro)
+        style_prop <- openxlsx::createStyle(
+          fontSize = 10,
+          halign = "center",
+          valign = "center",
+          fgFill = "#E2EFDA",
+          border = "TopBottomLeftRight"
+        )
+        
+        # Aplicar estilos a datos
+        num_rows_datos <- nrow(datos_celdas)
+        if (num_rows_datos > 0) {
+          openxlsx::addStyle(wb, "Vertices_Celdas", style_locacion, rows = 3:(3 + num_rows_datos - 1), cols = 1, gridExpand = TRUE)
+          openxlsx::addStyle(wb, "Vertices_Celdas", style_celda, rows = 3:(3 + num_rows_datos - 1), cols = 2, gridExpand = TRUE)
+          openxlsx::addStyle(wb, "Vertices_Celdas", style_puntos, rows = 3:(3 + num_rows_datos - 1), cols = 3, gridExpand = TRUE)
+          openxlsx::addStyle(wb, "Vertices_Celdas", style_area, rows = 3:(3 + num_rows_datos - 1), cols = 4, gridExpand = TRUE)
+          openxlsx::addStyle(wb, "Vertices_Celdas", style_coords, rows = 3:(3 + num_rows_datos - 1), cols = 5:7, gridExpand = TRUE)
+          openxlsx::addStyle(wb, "Vertices_Celdas", style_tph, rows = 3:(3 + num_rows_datos - 1), cols = 8, gridExpand = TRUE)
+          openxlsx::addStyle(wb, "Vertices_Celdas", style_prop, rows = 3:(3 + num_rows_datos - 1), cols = 9, gridExpand = TRUE)
+        }
+        
+        # ========== AJUSTAR ANCHOS DE COLUMNA ==========
+        openxlsx::setColWidths(wb, "Vertices_Celdas", cols = 1, widths = 15)   # Locación
+        openxlsx::setColWidths(wb, "Vertices_Celdas", cols = 2, widths = 18)   # Celda
+        openxlsx::setColWidths(wb, "Vertices_Celdas", cols = 3, widths = 35)   # Puntos superan
+        openxlsx::setColWidths(wb, "Vertices_Celdas", cols = 4, widths = 15)   # Área
+        openxlsx::setColWidths(wb, "Vertices_Celdas", cols = 5, widths = 10)   # Vértice
+        openxlsx::setColWidths(wb, "Vertices_Celdas", cols = 6, widths = 15)   # Este
+        openxlsx::setColWidths(wb, "Vertices_Celdas", cols = 7, widths = 15)   # Norte
+        openxlsx::setColWidths(wb, "Vertices_Celdas", cols = 8, widths = 15)   # TPH
+        openxlsx::setColWidths(wb, "Vertices_Celdas", cols = 9, widths = 18)   # Proporción
+        
+        # Ajustar altura de filas de encabezado
+        openxlsx::setRowHeights(wb, "Vertices_Celdas", rows = 1, heights = 50)
+        openxlsx::setRowHeights(wb, "Vertices_Celdas", rows = 2, heights = 20)
         
         tiene_datos <- TRUE
       }
       
-      # ========== Hoja 3: PROMEDIOS DE LOCACIONES CONTAMINADAS ==========
-      # No hay vértices de locaciones, pero incluimos los promedios para referencia
-      if (!is.null(promedios_locaciones_resultado())) {
-        locaciones_contaminadas <- promedios_locaciones_resultado() %>%
-          filter(criterio_contaminacion != "No contaminada") %>%
-          select(LOCACION, TPH, criterio_contaminacion, contaminada_por_tph, 
-                 contaminada_por_proporcion, prop_exceed, n_puntos_total, n_puntos_contaminados, 
-                 everything())
+      # ========== Hoja 3: LOCACIONES CONTAMINADAS - FORMATO COMPLETO ==========
+      # Lista todas las celdas de cada locación contaminada
+      if (!is.null(promedios_locaciones_resultado()) && !is.null(shp_celdas_data()) && !is.null(muestra_enriquecida())) {
+        locs_contaminadas <- promedios_locaciones_resultado() %>%
+          filter(criterio_contaminacion != "No contaminada")
         
-        if (nrow(locaciones_contaminadas) > 0) {
-          openxlsx::addWorksheet(wb, "Locaciones_Contaminadas")
-          openxlsx::writeData(wb, "Locaciones_Contaminadas", locaciones_contaminadas)
+        if (nrow(locs_contaminadas) > 0) {
+          # Crear lista de códigos de puntos contaminados por locación
+          puntos_por_locacion <- muestra_enriquecida() %>%
+            filter(TPH > input$umbral_tph) %>%
+            group_by(LOCACION) %>%
+            summarise(
+              puntos_contaminados = paste(sort(unique(PUNTO)), collapse = ", "),
+              .groups = "drop"
+            )
           
-          # Aplicar formato al encabezado
-          header_style <- openxlsx::createStyle(
-            fontSize = 11, 
-            fontColour = "#FFFFFF", 
-            halign = "center",
-            fgFill = "#5bc0de", 
-            border = "TopBottomLeftRight",
-            textDecoration = "bold"
-          )
-          openxlsx::addStyle(wb, sheet = "Locaciones_Contaminadas", header_style, rows = 1, 
-                            cols = 1:ncol(locaciones_contaminadas), gridExpand = TRUE)
+          # Unir puntos contaminados a locaciones
+          locs_contaminadas <- locs_contaminadas %>%
+            left_join(puntos_por_locacion, by = "LOCACION") %>%
+            mutate(puntos_contaminados = ifelse(is.na(puntos_contaminados), "", puntos_contaminados))
           
-          tiene_datos <- TRUE
+          # Obtener shapefile de celdas con atributos
+          # El shapefile ya tiene las columnas estandarizadas durante la carga
+          shp_celdas_attrs <- shp_celdas_data() %>%
+            st_drop_geometry()
+          
+          # Detectar columna de código de celda
+          col_celda <- NULL
+          if ("COD_CELDA" %in% names(shp_celdas_attrs)) {
+            col_celda <- "COD_CELDA"
+          } else if ("CELDA" %in% names(shp_celdas_attrs)) {
+            col_celda <- "CELDA"
+          } else if ("COD_UNIC" %in% names(shp_celdas_attrs)) {
+            col_celda <- "COD_UNIC"
+          }
+          
+          # Si no encontramos columna de celda, usar la primera columna
+          if (is.null(col_celda)) {
+            col_celda <- names(shp_celdas_attrs)[1]
+          }
+          
+          # Seleccionar y renombrar columnas
+          shp_celdas_attrs <- shp_celdas_attrs %>%
+            select(any_of(c(col_celda, "LOCACION", "AREA", "COD_PLANO"))) %>%
+            rename(COD_CELDA = 1)  # Renombrar primera columna a COD_CELDA
+          
+          # Crear tabla expandida: para cada locación contaminada, listar todas sus celdas
+          datos_locaciones <- locs_contaminadas %>%
+            select(LOCACION, puntos_contaminados, TPH, prop_exceed) %>%
+            inner_join(
+              shp_celdas_attrs,
+              by = "LOCACION",
+              relationship = "many-to-many"
+            ) %>%
+            arrange(LOCACION, COD_CELDA) %>%
+            select(LOCACION, puntos_contaminados, COD_CELDA, any_of("COD_PLANO"), AREA, TPH, prop_exceed)
+          
+          # Verificar que hay datos
+          if (nrow(datos_locaciones) > 0) {
+            
+            # Crear worksheet
+            openxlsx::addWorksheet(wb, "Locaciones_Contaminadas")
+            
+            # ========== ENCABEZADOS DINÁMICOS ==========
+            # Detectar si COD_PLANO existe
+            tiene_cod_plano <- "COD_PLANO" %in% names(datos_locaciones)
+            
+            if (tiene_cod_plano) {
+              headers <- c(
+                "Pozo/Locación",
+                "Código de los puntos que superaron el nivel de intervención dentro de la celda",
+                "Código de la Celda",
+                "Código de la celda en el plano",
+                "Área de la celda contaminada (m2)",
+                "TPH mg/kg (Promedio ponderado)",
+                "Proporción de puntos contaminados"
+              )
+              # Índices de columnas para fusionar
+              cols_fusionar <- c(1, 2, 6, 7)
+            } else {
+              headers <- c(
+                "Pozo/Locación",
+                "Código de los puntos que superaron el nivel de intervención dentro de la celda",
+                "Código de la Celda",
+                "Área de la celda contaminada (m2)",
+                "TPH mg/kg (Promedio ponderado)",
+                "Proporción de puntos contaminados"
+              )
+              # Índices de columnas para fusionar (sin COD_PLANO)
+              cols_fusionar <- c(1, 2, 5, 6)
+            }
+            
+            # Escribir encabezados
+            openxlsx::writeData(wb, "Locaciones_Contaminadas", t(headers), startRow = 1, colNames = FALSE)
+            
+            # Escribir datos (empezando en fila 2)
+            openxlsx::writeData(wb, "Locaciones_Contaminadas", datos_locaciones, startRow = 2, colNames = FALSE)
+            
+            # ========== FUSIONES DE DATOS ==========
+            
+            # Calcular rangos de fusión para cada locación
+            datos_con_rangos <- datos_locaciones %>%
+              mutate(row_num = row_number() + 1) %>%  # +1 porque empezamos en fila 2
+              group_by(LOCACION) %>%
+              mutate(
+                loc_start = min(row_num),
+                loc_end = max(row_num)
+              ) %>%
+              ungroup()
+            
+            # Fusionar columnas (Locación, puntos, TPH, proporción) por locación
+            rangos_locacion <- datos_con_rangos %>%
+              select(LOCACION, loc_start, loc_end) %>%
+              distinct() %>%
+              filter(loc_end > loc_start)
+            
+            if (nrow(rangos_locacion) > 0) {
+              for (i in 1:nrow(rangos_locacion)) {
+                # Fusionar columnas según si tiene o no COD_PLANO
+                for (col in cols_fusionar) {
+                  openxlsx::mergeCells(wb, "Locaciones_Contaminadas",
+                                      cols = col,
+                                      rows = rangos_locacion$loc_start[i]:rangos_locacion$loc_end[i])
+                }
+              }
+            }
+            
+            # ========== ESTILOS Y COLORES ==========
+            
+            # Estilo para encabezados
+            style_header <- openxlsx::createStyle(
+              fontSize = 10,
+              fontColour = "#000000",
+              halign = "center",
+              valign = "center",
+              fgFill = "#92D050",
+              border = "TopBottomLeftRight",
+              textDecoration = "bold",
+              wrapText = TRUE
+            )
+            
+            openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_header, rows = 1, cols = 1:7, gridExpand = TRUE)
+            
+            # Estilo para columna LOCACION (azul claro)
+            style_locacion <- openxlsx::createStyle(
+              fontSize = 10,
+              halign = "center",
+              valign = "center",
+              fgFill = "#D9E1F2",
+              border = "TopBottomLeftRight"
+            )
+            
+            # Estilo para puntos (blanco)
+            style_puntos <- openxlsx::createStyle(
+              fontSize = 10,
+              halign = "center",
+              valign = "center",
+              fgFill = "#FFFFFF",
+              border = "TopBottomLeftRight",
+              wrapText = TRUE
+            )
+            
+            # Estilo para códigos de celda (blanco)
+            style_celda <- openxlsx::createStyle(
+              fontSize = 10,
+              halign = "center",
+              valign = "center",
+              fgFill = "#FFFFFF",
+              border = "TopBottomLeftRight"
+            )
+            
+            # Estilo para área (blanco)
+            style_area <- openxlsx::createStyle(
+              fontSize = 10,
+              halign = "center",
+              valign = "center",
+              fgFill = "#FFFFFF",
+              border = "TopBottomLeftRight"
+            )
+            
+            # Estilo para TPH (rojo con texto blanco)
+            style_tph <- openxlsx::createStyle(
+              fontSize = 10,
+              fontColour = "#FFFFFF",
+              halign = "center",
+              valign = "center",
+              fgFill = "#FF0000",
+              border = "TopBottomLeftRight",
+              textDecoration = "bold"
+            )
+            
+            # Estilo para proporción (verde claro)
+            style_prop <- openxlsx::createStyle(
+              fontSize = 10,
+              halign = "center",
+              valign = "center",
+              fgFill = "#E2EFDA",
+              border = "TopBottomLeftRight"
+            )
+            
+            # Aplicar estilos a datos (dinámico según si tiene COD_PLANO)
+            num_rows_datos <- nrow(datos_locaciones)
+            if (num_rows_datos > 0) {
+              openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_locacion, rows = 2:(2 + num_rows_datos - 1), cols = 1, gridExpand = TRUE)
+              openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_puntos, rows = 2:(2 + num_rows_datos - 1), cols = 2, gridExpand = TRUE)
+              
+              if (tiene_cod_plano) {
+                # Con COD_PLANO: col 3 = celda, col 4 = plano, col 5 = área, col 6 = TPH, col 7 = prop
+                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_celda, rows = 2:(2 + num_rows_datos - 1), cols = 3:4, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_area, rows = 2:(2 + num_rows_datos - 1), cols = 5, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_tph, rows = 2:(2 + num_rows_datos - 1), cols = 6, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_prop, rows = 2:(2 + num_rows_datos - 1), cols = 7, gridExpand = TRUE)
+              } else {
+                # Sin COD_PLANO: col 3 = celda, col 4 = área, col 5 = TPH, col 6 = prop
+                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_celda, rows = 2:(2 + num_rows_datos - 1), cols = 3, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_area, rows = 2:(2 + num_rows_datos - 1), cols = 4, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_tph, rows = 2:(2 + num_rows_datos - 1), cols = 5, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_prop, rows = 2:(2 + num_rows_datos - 1), cols = 6, gridExpand = TRUE)
+              }
+            }
+            
+            # ========== AJUSTAR ANCHOS DE COLUMNA (dinámico) ==========
+            openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 1, widths = 15)   # Locación
+            openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 2, widths = 45)   # Puntos
+            
+            if (tiene_cod_plano) {
+              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 3, widths = 18)   # Cód celda
+              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 4, widths = 18)   # Cód plano
+              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 5, widths = 15)   # Área
+              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 6, widths = 15)   # TPH
+              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 7, widths = 18)   # Proporción
+            } else {
+              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 3, widths = 18)   # Cód celda
+              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 4, widths = 15)   # Área
+              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 5, widths = 15)   # TPH
+              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 6, widths = 18)   # Proporción
+            }
+            
+            # Ajustar altura de fila de encabezado
+            openxlsx::setRowHeights(wb, "Locaciones_Contaminadas", rows = 1, heights = 45)
+            
+            tiene_datos <- TRUE
+          }
         }
       }
       

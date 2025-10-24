@@ -5899,10 +5899,12 @@ server <- function(input, output, session) {
     patrones_celda <- c("CELDA", "CELDAS", "COD_CELDA", "COD_CELDAS", "CELL", "CODIGO_CELDA", "COD_UNIC")
     patrones_locacion <- c("LOCACION", "UBICACION", "LOCATION", "LOC")
     patrones_area <- c("AREA", "SUPERFICIE", "HECTARES", "Shape_Area")
+    patrones_cod_plano <- c("COD_AREA", "COD_AREA_PLANO", "COD_PLANO", "CODIGO_PLANO", "COD_PLAN")
     
     col_celda_sugerida <- detectar_columna_candidata(cols, patrones_celda)
     col_locacion_sugerida <- detectar_columna_candidata(cols, patrones_locacion)
     col_area_sugerida <- detectar_columna_candidata(cols, patrones_area)
+    col_cod_plano_sugerida <- detectar_columna_candidata(cols, patrones_cod_plano)
     
     # Verificar si se encontró una columna apropiada
     tiene_patron_celda <- any(grepl("CELD|CELL", toupper(paste(cols, collapse = "|"))))
@@ -5931,7 +5933,10 @@ server <- function(input, output, session) {
       selectInput("col_area_celda_shp", "Columna de ÁREA:",
                  choices = cols,
                  selected = col_area_sugerida),
-      p(em("Selecciona las columnas que identifican celda, locación y área"), style = "font-size: 0.9em; color: #666;")
+      selectInput("col_cod_plano_celda_shp", "Columna de CÓDIGO EN PLANO (opcional):",
+                 choices = c("(Ninguno)" = "", cols),
+                 selected = ifelse(is.null(col_cod_plano_sugerida), "", col_cod_plano_sugerida)),
+      p(em("Selecciona las columnas que identifican celda, locación, área y código en plano"), style = "font-size: 0.9em; color: #666;")
     )
   })
   
