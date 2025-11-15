@@ -293,7 +293,7 @@ ui <- navbarPage(
            fluidRow(
              column(width = 3,
                     wellPanel(class = "fade-in",
-                      h3("3A. Revisión de Marcos en Shapefile", class = "fade-in"),
+                      h3("3A. 🚨Revisión de Marcos en Shapefile", class = "fade-in"),
                       div(class = "card",
                         p(style = "font-size: 13px; color: #555;", 
                           tags$b("Propósito:"), " Validar coherencia espacial entre grillas y celdas usando shapefiles."),
@@ -334,11 +334,12 @@ ui <- navbarPage(
                         tags$hr(),
                         
                         # OPCIONAL: Cargar Excel de impactadas de Fase 5
-                        div(style = "background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin-bottom: 10px; border-radius: 4px;",
-                          tags$div(style = "font-weight: bold; font-size: 13px; color: #856404; margin-bottom: 5px;",
+                      h3("3B. 🔥Revisión de Áreas Impactadas", class = "fade-in"),
+                        div(style = "background-color: #2d8ff7; border-left: 4px solid #1307ff; padding: 10px; margin-bottom: 10px; border-radius: 4px;",
+                          tags$div(style = "font-weight: bold; font-size: 13px; color: #f5f5f5; margin-bottom: 5px;",
                             icon("flask"), " OPCIONAL: Excel de Grillas/Celdas Impactadas"),
-                          p(style = "font-size: 11px; color: #666; margin: 5px 0;",
-                            "Generado en la Fase 5 'Análisis de Resultados'")
+                          p(style = "font-size: 11px; color: #ebebeb; margin: 5px 0;",
+                            "Generado en la Fase 6 'Análisis de Resultados'")
                         ),
                         fileInput("archivo_impactadas_excel", 
                                  "Cargar Reporte_SOLO_impactadaS.xlsx:", 
@@ -350,7 +351,11 @@ ui <- navbarPage(
                             tags$b("solo las grillas/celdas impactadas"), " con problemas espaciales.")
                         ),
                         uiOutput("info_carga_impactadas")
-                      )
+                      ),
+                       actionButton("verificar_espacial_btn", 
+                                    "🔥 Ejecutar Verificación de Impactadas", 
+                                    class = "btn-info btn-block"),
+                        tags$hr()
                     )
              ),
              column(width = 9,
@@ -410,7 +415,7 @@ ui <- navbarPage(
                                           DTOutput("tabla_grillas_fuera"),
                                           hr(),
                                           downloadButton("descargar_marco_grillas_limpio_btn", 
-                                                        "📥 Descargar Marco de Grillas Limpio (ZIP)", 
+                                                        "📥 Descargar Marco de Grillas Limpio (SHAPEFILE ZIP)", 
                                                         class = "btn-success btn-lg"),
                                           p(style = "margin-top: 10px; font-size: 12px; color: #666;",
                                             "Este archivo ZIP contendrá el shapefile de grillas sin las grillas problemáticas identificadas.")
@@ -772,7 +777,7 @@ ui <- navbarPage(
                       tags$hr(),
                       h3("6B. Análisis Estadístico", class = "fade-in"),
                       div(class = "card",
-                        numericInput("umbral_tph", "Umbral de contaminación TPH (mg/kg)", 
+                        numericInput("umbral_tph", "Umbral de impacto TPH (mg/kg)", 
                                     value = 10000, min = 0, step = 100),
                         actionButton("ejecutar_analisis_btn", "Ejecutar Análisis Completo", 
                                     class = "btn-success btn-block")
@@ -1277,6 +1282,15 @@ ui <- navbarPage(
                       "descargar_reporte_solo_impactadas_btn",
                       "Descargar (.xlsx)",
                       class = "btn-warning btn-sm btn-block"
+                    ),
+                    div(
+                      style = "background-color: #e7f3ff; border-left: 3px solid #2196f3; padding: 8px; margin-top: 10px; border-radius: 3px;",
+                      p(
+                        style = "font-size: 0.8em; color: #1565c0; margin: 0;",
+                        icon("info-circle"),
+                        " Este es el excel que se usa en la Fase 3 para generar las validaciones de ",
+                        tags$b("Impactadas Fuera de Celdas"), " e ", tags$b("Impactadas Código Correcto"), "."
+                      )
                     )
                   ),
                   tags$hr(),
@@ -1310,6 +1324,16 @@ ui <- navbarPage(
                       "descargar_vertices_jerarquia_btn",
                       "Descargar (.xlsx)",
                       class = "btn-success btn-sm btn-block"
+                    ),
+                    div(
+                      style = "background-color: #fff3e0; border-left: 3px solid #ff9800; padding: 8px; margin-top: 10px; border-radius: 3px;",
+                      p(
+                        style = "font-size: 0.8em; color: #e65100; margin: 0;",
+                        icon("exclamation-triangle"),
+                        " Para la conclusión de locaciones, añade manualmente en la tabla y en el informe ",
+                        tags$b("las celdas que se limpiaron en el marco de celdas"),
+                        " pero que sí fueron remediadas dentro de la locación (ver planos)."
+                      )
                     )
                   ),
                   tags$hr(),
@@ -3524,8 +3548,8 @@ server <- function(input, output, session) {
   # Info de carga de Excel de impactadas
   output$info_carga_impactadas <- renderUI({
     if (is.null(grillas_impactadas_f5())) {
-      tags$div(style = "background-color: #fff3cd; padding: 10px; border-radius: 4px; margin-top: 10px;",
-        p(style = "margin: 0; color: #856404;",
+      tags$div(style = "background-color: #bdddff; padding: 10px; border-radius: 4px; margin-top: 10px;",
+        p(style = "margin: 0; color: #0a0480;",
           icon("exclamation-triangle"),
           " No se ha cargado el Excel de impactadas. ",
           tags$b("Cargue el archivo en la sección izquierda para ver el análisis.")
@@ -3787,8 +3811,16 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       tryCatch({
+        # Validaciones manuales en lugar de req()
         resultado_fuera <- resultado_grillas_fuera()
-        req(resultado_fuera)
+        if (is.null(resultado_fuera)) {
+          stop("No se ha ejecutado la verificación espacial. Por favor, ejecute primero la verificación.")
+        }
+        
+        shp_original <- shp_grillas_verif()
+        if (is.null(shp_original)) {
+          stop("No se ha cargado el shapefile de grillas. Por favor, cargue el archivo primero.")
+        }
         
         if (resultado_fuera$n_fuera == 0) {
           showNotification(
@@ -3796,11 +3828,9 @@ server <- function(input, output, session) {
             type = "message",
             duration = 5
           )
-          # Exportar el shapefile original sin cambios
-          shp_original <- shp_grillas_verif()
+          # Exportar el shapefile original sin cambios (ya está en shp_original)
         } else {
           # Detectar columna de grilla
-          shp_original <- shp_grillas_verif()
           col_grilla <- NULL
           if ("GRILLA" %in% names(shp_original)) {
             col_grilla <- "GRILLA"
@@ -3856,6 +3886,28 @@ server <- function(input, output, session) {
           type = "error",
           duration = 10
         )
+        
+        # Crear archivo de texto con información del error
+        temp_dir <- tempdir()
+        temp_file <- file.path(temp_dir, "ERROR_INFO.txt")
+        writeLines(c(
+          "ERROR AL GENERAR SHAPEFILE LIMPIO",
+          "================================",
+          "",
+          paste("Fecha:", Sys.time()),
+          "",
+          "Descripción del error:",
+          conditionMessage(e),
+          "",
+          "Solución:",
+          "1. Asegúrese de haber ejecutado la 'Verificación Espacial' primero",
+          "2. Verifique que los archivos shapefile se hayan cargado correctamente",
+          "3. Revise la consola R para más detalles del error"
+        ), temp_file)
+        
+        # Crear ZIP con el archivo de error
+        zip::zip(file, files = basename(temp_file), root = temp_dir)
+        unlink(temp_file)
       })
     }
   )
@@ -5730,11 +5782,11 @@ server <- function(input, output, session) {
     datos <- muestra_enriquecida()
     umbral <- input$umbral_tph
     
-    # Añadir columna criterio_contaminacion
+    # Añadir columna criterio_de_impacto
     grillas_contam <- datos %>% 
       filter(TPH > umbral) %>%
-      mutate(criterio_contaminacion = "Supera umbral TPH") %>%
-      select(criterio_contaminacion, everything())
+      mutate(criterio_de_impacto = "Supera umbral TPH") %>%
+      select(criterio_de_impacto, everything())
     
     # Encontrar índices de columnas TPH y PORC_EXCESO (base 0 para JavaScript)
     col_indices <- c()
@@ -5769,7 +5821,7 @@ server <- function(input, output, session) {
       rownames = FALSE
     ) %>%
       formatStyle(
-        "criterio_contaminacion",
+        "criterio_de_impacto",
         backgroundColor = "#dc3545",
         color = "white",
         fontWeight = "bold"
@@ -5781,14 +5833,14 @@ server <- function(input, output, session) {
     datos <- muestra_enriquecida()
     umbral <- input$umbral_tph
     
-    # Añadir columna criterio_contaminacion a todos
+    # Añadir columna criterio_de_impacto a todos
     datos_con_criterio <- datos %>%
-      mutate(criterio_contaminacion = ifelse(TPH > umbral, "Supera umbral TPH", "No impactada")) %>%
-      select(criterio_contaminacion, everything())
+      mutate(criterio_de_impacto = ifelse(TPH > umbral, "Supera umbral TPH", "No impactada")) %>%
+      select(criterio_de_impacto, everything())
     
     datatable(datos_con_criterio, options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE) %>%
       formatStyle(
-        "criterio_contaminacion",
+        "criterio_de_impacto",
         backgroundColor = styleEqual(
           c("Supera umbral TPH", "No impactada"),
           c("#dc3545", "#28a745")
@@ -5813,8 +5865,8 @@ server <- function(input, output, session) {
       umbral <- input$umbral_tph
       
       datos_con_criterio <- datos %>%
-        mutate(criterio_contaminacion = ifelse(TPH > umbral, "Supera umbral TPH", "No impactada")) %>%
-        select(criterio_contaminacion, everything())
+        mutate(criterio_de_impacto = ifelse(TPH > umbral, "Supera umbral TPH", "No impactada")) %>%
+        select(criterio_de_impacto, everything())
       
       openxlsx::write.xlsx(datos_con_criterio, file)
     }

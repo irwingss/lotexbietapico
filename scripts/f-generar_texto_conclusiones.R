@@ -148,7 +148,7 @@ generar_texto_conclusiones <- function(muestra, celdas, locaciones, umbral,
   
   # Locaciones impactadas
   locaciones_impactadas <- locaciones %>%
-    filter(criterio_contaminacion != "No impactada")
+    filter(criterio_de_impacto != "No impactada")
   n_locaciones_impactadas <- nrow(locaciones_impactadas)
   
   # ============ IDENTIFICAR PUNTOS EXCLUIDOS POR JERARQUÍA ============
@@ -353,7 +353,7 @@ generar_texto_conclusiones <- function(muestra, celdas, locaciones, umbral,
     "\n",
     "Resultados a nivel de celda\n",
     "\n",
-    "Para determinar el estado de contaminación por hidrocarburos totales de petróleo (TPH) en las celdas remediadas, se aplicaron dos enfoques metodológicos complementarios, con base en los criterios establecidos en el Estudio Ambiental del ",
+    "Para determinar el estado de impacto por hidrocarburos totales de petróleo (TPH) en las celdas remediadas, se aplicaron dos enfoques metodológicos complementarios, con base en los criterios establecidos en el Estudio Ambiental del ",
     nombre_lote, ":\n",
     "\n",
     "Promedio ponderado de TPH: Se calculó el promedio ponderado de los valores de TPH correspondientes a los puntos de muestreo ubicados dentro del polígono de cada celda. Si dicho promedio supera el nivel de intervención de ",
@@ -375,7 +375,7 @@ generar_texto_conclusiones <- function(muestra, celdas, locaciones, umbral,
     "\n",
     "Resultados a nivel de locación\n",
     "\n",
-    "Para determinar el estado de contaminación por hidrocarburos totales de petróleo (TPH) en las locaciones remediadas, se aplicaron dos enfoques metodológicos complementarios, con base en los criterios establecidos en el Estudio Ambiental del ",
+    "Para determinar el estado de impacto por hidrocarburos totales de petróleo (TPH) en las locaciones remediadas, se aplicaron dos enfoques metodológicos complementarios, con base en los criterios establecidos en el Estudio Ambiental del ",
     nombre_lote, ":\n",
     "\n",
     "Promedio ponderado de TPH: Se calculó el promedio ponderado de los valores de TPH correspondientes a los puntos de muestreo ubicados dentro del polígono de cada locación. Si dicho promedio supera el nivel de intervención de ",
@@ -412,7 +412,7 @@ generar_texto_conclusiones <- function(muestra, celdas, locaciones, umbral,
     else ".", "\n",
     "[ESCRIBIR_NUMERO_TEXTUAL] (", sprintf("%02d", n_celdas_jerarquia), ") celda con un área total de ",
     round(area_celdas_jerarquia, 2), " m² de las ", 
-    if (!is.null(celdas) && nrow(celdas) > 0) nrow(celdas %>% filter(criterio_contaminacion != "No impactada")) else "XX",
+    if (!is.null(celdas) && nrow(celdas) > 0) nrow(celdas %>% filter(criterio_de_impacto != "No impactada")) else "XX",
     " descritas en el Cuadro N°10: ", codigos_celdas_jerarquia,
     if (n_locaciones_impactadas > 0) paste0("; exceptuando las celdas de la locación ", locs_impactadas_nombres, ".") else ".", "\n",
     "[ESCRIBIR_NUMERO_TEXTUAL] (", sprintf("%02d", n_locaciones_impactadas), ") locación completa con un área total de ",

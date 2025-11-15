@@ -477,7 +477,7 @@ calcular_promedios_celdas <- function(muestra_final_e, umbral = 10000) {
     mutate(
       impactada_por_tph = ifelse(TPH > umbral, "Sí", "No"),
       impactada_por_proporcion = ifelse(prop_exceed > 0.5, "Sí", "No"),
-      criterio_contaminacion = case_when(
+      criterio_de_impacto = case_when(
         impactada_por_tph == "Sí" & impactada_por_proporcion == "Sí" ~ "Ambos criterios",
         impactada_por_tph == "Sí" ~ "Solo TPH promedio",
         impactada_por_proporcion == "Sí" ~ "Solo proporción",
@@ -571,7 +571,7 @@ calcular_promedios_locaciones <- function(muestra_final_e, umbral = 10000) {
     mutate(
       impactada_por_tph = ifelse(TPH > umbral, "Sí", "No"),
       impactada_por_proporcion = ifelse(prop_exceed > 0.5, "Sí", "No"),
-      criterio_contaminacion = case_when(
+      criterio_de_impacto = case_when(
         impactada_por_tph == "Sí" & impactada_por_proporcion == "Sí" ~ "Ambos criterios",
         impactada_por_tph == "Sí" ~ "Solo TPH promedio",
         impactada_por_proporcion == "Sí" ~ "Solo proporción",
@@ -673,9 +673,9 @@ generar_vertices_grillas <- function(shp_marco_grillas, muestra_final_e,
     left_join(attrs_grillas, by = "COD_GRILLA") %>%
     inner_join(lk_punto_grilla, by = "COD_GRILLA") %>%
     mutate(
-      criterio_contaminacion = ifelse(tph > umbral, "Supera umbral TPH", "No impactada")
+      criterio_de_impacto = ifelse(tph > umbral, "Supera umbral TPH", "No impactada")
     ) %>%
-    relocate(criterio_contaminacion, codigo_punto, tph, LOCACION, COD_GRILLA, AREA, .before = part_id) %>%
+    relocate(criterio_de_impacto, codigo_punto, tph, LOCACION, COD_GRILLA, AREA, .before = part_id) %>%
     rename(ESTE = X, NORTE = Y)
   
   return(vertices_grillas_enriq)
@@ -770,10 +770,10 @@ generar_vertices_celdas <- function(shp_marco_celdas, Promedio_celdas_final,
     mutate(
       # Calcular proporción decimal para comparación
       prop_decimal = prop_superan_pct / 100,
-      # Determinar criterio de contaminación
+      # Determinar criterio de impacto
       impactada_por_tph = ifelse(!is.na(tph_celda) & tph_celda > umbral, TRUE, FALSE),
       impactada_por_proporcion = ifelse(!is.na(prop_decimal) & prop_decimal > 0.5, TRUE, FALSE),
-      criterio_contaminacion = case_when(
+      criterio_de_impacto = case_when(
         impactada_por_tph & impactada_por_proporcion ~ "Ambos criterios",
         impactada_por_tph ~ "Solo TPH promedio",
         impactada_por_proporcion ~ "Solo proporción",
@@ -781,7 +781,7 @@ generar_vertices_celdas <- function(shp_marco_celdas, Promedio_celdas_final,
       )
     ) %>%
     select(-prop_decimal, -impactada_por_tph, -impactada_por_proporcion) %>%
-    relocate(criterio_contaminacion, COD_UNIC, LOCACION, AREA, tph_celda, puntos_superan, prop_superan_pct, .before = part_id) %>%
+    relocate(criterio_de_impacto, COD_UNIC, LOCACION, AREA, tph_celda, puntos_superan, prop_superan_pct, .before = part_id) %>%
     rename(ESTE = X, NORTE = Y)
   
   return(out)

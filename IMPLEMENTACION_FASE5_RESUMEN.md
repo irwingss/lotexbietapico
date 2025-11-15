@@ -25,7 +25,7 @@ Se ha implementado exitosamente el **flujo completo de análisis de resultados d
 #### Análisis Nivel Celdas (líneas 274-329)
 - Añadido conteo de puntos totales y impactados por celda
 - Implementado cálculo de proporción de puntos que superan umbral
-- Añadida columna `criterio_contaminacion` con clasificación:
+- Añadida columna `criterio_de_impacto` con clasificación:
   - "Ambos criterios"
   - "Solo TPH promedio"
   - "Solo proporción"
@@ -34,7 +34,7 @@ Se ha implementado exitosamente el **flujo completo de análisis de resultados d
 #### Análisis Nivel Locaciones (líneas 388-467)
 - Completado cálculo de proporción de puntos impactados por locación
 - Añadido conteo de puntos totales y impactados
-- Implementado criterio de contaminación dual (TPH + proporción)
+- Implementado criterio de impacto dual (TPH + proporción)
 - Generación de códigos de locaciones impactadas por ambos criterios
 
 **Resultado:** Documento RMarkdown 100% funcional con todos los análisis estadísticos completos.
@@ -69,7 +69,7 @@ calcular_promedios_celdas(muestra_final_e, umbral = 10000)
 - Crea objeto survey con diseño bietápico
 - Calcula promedios de TPH por celda con IC 95%
 - Calcula proporción de puntos impactados
-- Genera criterio de contaminación dual
+- Genera criterio de impacto dual
 - Retorna tabla con todas las métricas
 
 ```r
@@ -232,7 +232,7 @@ vertices_celdas_prop_resultado <- reactiveVal(NULL)
 - `prof` (opcional)
 
 #### **PASO 2: Ejecutar Análisis Estadístico**
-1. Usuario define umbral de contaminación (default: 10000 mg/kg)
+1. Usuario define umbral de impacto (default: 10000 mg/kg)
 2. Click en "Ejecutar Análisis Completo"
 3. Sistema ejecuta:
    - Análisis nivel grilla (puntos individuales)
@@ -247,7 +247,7 @@ vertices_celdas_prop_resultado <- reactiveVal(NULL)
 - Proporción de puntos impactados
 - IC 95% de la proporción
 - Conteo de puntos totales y impactados
-- Criterio de contaminación clasificado
+- Criterio de impacto clasificado
 
 #### **PASO 3: Generar Vértices (Opcional)**
 1. Usuario carga shapefile de grillas (.zip)
@@ -314,7 +314,7 @@ survey_design_obj2 <- svydesign(
 
 ---
 
-## 🎯 CRITERIOS DE CONTAMINACIÓN
+## 🎯 CRITERIOS DE IMPACTO
 
 ### Dual Classification System
 
@@ -325,7 +325,7 @@ Cada celda/locación se clasifica según:
 | **TPH Promedio** | Promedio de TPH > umbral | "Sí" / "No" |
 | **Proporción** | >50% de puntos impactados | "Sí" / "No" |
 
-**Clasificación Final (`criterio_contaminacion`):**
+**Clasificación Final (`criterio_de_impacto`):**
 - ✅ "Ambos criterios": TPH promedio Y proporción cumplen
 - ⚠️ "Solo TPH promedio": Solo cumple TPH promedio
 - ⚠️ "Solo proporción": Solo cumple proporción
@@ -412,7 +412,7 @@ tryCatch({
 - [ ] Ejecutar con umbral default (10000)
 - [ ] Ejecutar con umbral personalizado
 - [ ] Verificar cálculo de IC 95%
-- [ ] Verificar clasificación de criterio_contaminacion
+- [ ] Verificar clasificación de criterio_de_impacto
 - [ ] Confirmar conteo de puntos totales vs impactados
 
 #### Generación de Vértices
@@ -467,7 +467,7 @@ Ver `Extraccion_de_Resultados.Rmd` para ejemplos de uso interactivo del código 
 - ✅ Análisis estadístico multinivel (grilla, celda, locación)
 - ✅ Diseño de muestreo complejo con `survey`
 - ✅ Cálculo de IC 95% y proporciones
-- ✅ Criterio dual de contaminación
+- ✅ Criterio dual de impacto
 - ✅ Generación de vértices de polígonos
 - ✅ Exportación en múltiples formatos
 - ✅ Reporte completo multi-hoja
