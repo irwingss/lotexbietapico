@@ -431,7 +431,7 @@ calcular_promedios_celdas <- function(muestra_final_e, umbral = 10000) {
       IC95_low = TPH - z * se,
       IC95_high = TPH + z * se,
       RSE = (se / TPH) * 100,
-      Contaminada = ifelse(TPH > umbral, 1, 0)
+      impactada = ifelse(TPH > umbral, 1, 0)
     ) %>% 
     mutate(
       IC95_low = ifelse(IC95_low < 1, 0, IC95_low) %>% round(2),
@@ -463,7 +463,7 @@ calcular_promedios_celdas <- function(muestra_final_e, umbral = 10000) {
     group_by(CELDA) %>%
     summarise(
       n_puntos_total = n(),
-      n_puntos_contaminados = sum(TPH > umbral, na.rm = TRUE),
+      n_puntos_impactados = sum(TPH > umbral, na.rm = TRUE),
       .groups = "drop"
     )
   
@@ -475,13 +475,13 @@ calcular_promedios_celdas <- function(muestra_final_e, umbral = 10000) {
     ) %>%
     left_join(conteo_puntos_celda, by = "CELDA") %>%
     mutate(
-      contaminada_por_tph = ifelse(TPH > umbral, "Sí", "No"),
-      contaminada_por_proporcion = ifelse(prop_exceed > 0.5, "Sí", "No"),
+      impactada_por_tph = ifelse(TPH > umbral, "Sí", "No"),
+      impactada_por_proporcion = ifelse(prop_exceed > 0.5, "Sí", "No"),
       criterio_contaminacion = case_when(
-        contaminada_por_tph == "Sí" & contaminada_por_proporcion == "Sí" ~ "Ambos criterios",
-        contaminada_por_tph == "Sí" ~ "Solo TPH promedio",
-        contaminada_por_proporcion == "Sí" ~ "Solo proporción",
-        TRUE ~ "No contaminada"
+        impactada_por_tph == "Sí" & impactada_por_proporcion == "Sí" ~ "Ambos criterios",
+        impactada_por_tph == "Sí" ~ "Solo TPH promedio",
+        impactada_por_proporcion == "Sí" ~ "Solo proporción",
+        TRUE ~ "No impactada"
       )
     )
   
@@ -525,7 +525,7 @@ calcular_promedios_locaciones <- function(muestra_final_e, umbral = 10000) {
       IC95_low = TPH - z * se,
       IC95_high = TPH + z * se,
       RSE = (se / TPH) * 100,
-      Contaminada = ifelse(TPH > umbral, 1, 0)
+      impactada = ifelse(TPH > umbral, 1, 0)
     ) %>% 
     mutate(
       IC95_low = ifelse(IC95_low < 1, 0, IC95_low) %>% round(2),
@@ -557,7 +557,7 @@ calcular_promedios_locaciones <- function(muestra_final_e, umbral = 10000) {
     group_by(LOCACION) %>%
     summarise(
       n_puntos_total = n(),
-      n_puntos_contaminados = sum(TPH > umbral, na.rm = TRUE),
+      n_puntos_impactados = sum(TPH > umbral, na.rm = TRUE),
       .groups = "drop"
     )
   
@@ -569,13 +569,13 @@ calcular_promedios_locaciones <- function(muestra_final_e, umbral = 10000) {
     ) %>%
     left_join(conteo_puntos_loc, by = "LOCACION") %>%
     mutate(
-      contaminada_por_tph = ifelse(TPH > umbral, "Sí", "No"),
-      contaminada_por_proporcion = ifelse(prop_exceed > 0.5, "Sí", "No"),
+      impactada_por_tph = ifelse(TPH > umbral, "Sí", "No"),
+      impactada_por_proporcion = ifelse(prop_exceed > 0.5, "Sí", "No"),
       criterio_contaminacion = case_when(
-        contaminada_por_tph == "Sí" & contaminada_por_proporcion == "Sí" ~ "Ambos criterios",
-        contaminada_por_tph == "Sí" ~ "Solo TPH promedio",
-        contaminada_por_proporcion == "Sí" ~ "Solo proporción",
-        TRUE ~ "No contaminada"
+        impactada_por_tph == "Sí" & impactada_por_proporcion == "Sí" ~ "Ambos criterios",
+        impactada_por_tph == "Sí" ~ "Solo TPH promedio",
+        impactada_por_proporcion == "Sí" ~ "Solo proporción",
+        TRUE ~ "No impactada"
       )
     )
   
@@ -633,12 +633,12 @@ get_vertices <- function(sf_obj, code_col, codes) {
 
 # ---------------------------------------------------------------------------- #
 # FUNCIÓN: generar_vertices_grillas
-# Genera tabla de vértices de grillas contaminadas con información enriquecida
+# Genera tabla de vértices de grillas impactadas con información enriquecida
 # ---------------------------------------------------------------------------- #
 generar_vertices_grillas <- function(shp_marco_grillas, muestra_final_e, 
                                      superan_grilla, punto_col = "punto", 
                                      umbral = 10000) {
-  # Obtener vértices de las grillas contaminadas
+  # Obtener vértices de las grillas impactadas
   vertices_grillas <- get_vertices(
     sf_obj = shp_marco_grillas,
     code_col = "COD_GRILLA",
@@ -673,7 +673,7 @@ generar_vertices_grillas <- function(shp_marco_grillas, muestra_final_e,
     left_join(attrs_grillas, by = "COD_GRILLA") %>%
     inner_join(lk_punto_grilla, by = "COD_GRILLA") %>%
     mutate(
-      criterio_contaminacion = ifelse(tph > umbral, "Supera umbral TPH", "No contaminada")
+      criterio_contaminacion = ifelse(tph > umbral, "Supera umbral TPH", "No impactada")
     ) %>%
     relocate(criterio_contaminacion, codigo_punto, tph, LOCACION, COD_GRILLA, AREA, .before = part_id) %>%
     rename(ESTE = X, NORTE = Y)
@@ -683,7 +683,7 @@ generar_vertices_grillas <- function(shp_marco_grillas, muestra_final_e,
 
 # ---------------------------------------------------------------------------- #
 # FUNCIÓN: generar_vertices_celdas
-# Genera tabla de vértices de celdas contaminadas con información enriquecida
+# Genera tabla de vértices de celdas impactadas con información enriquecida
 # ---------------------------------------------------------------------------- #
 generar_vertices_celdas <- function(shp_marco_celdas, Promedio_celdas_final, 
                                     muestra_final_e, celdas_vec, 
@@ -771,16 +771,16 @@ generar_vertices_celdas <- function(shp_marco_celdas, Promedio_celdas_final,
       # Calcular proporción decimal para comparación
       prop_decimal = prop_superan_pct / 100,
       # Determinar criterio de contaminación
-      contaminada_por_tph = ifelse(!is.na(tph_celda) & tph_celda > umbral, TRUE, FALSE),
-      contaminada_por_proporcion = ifelse(!is.na(prop_decimal) & prop_decimal > 0.5, TRUE, FALSE),
+      impactada_por_tph = ifelse(!is.na(tph_celda) & tph_celda > umbral, TRUE, FALSE),
+      impactada_por_proporcion = ifelse(!is.na(prop_decimal) & prop_decimal > 0.5, TRUE, FALSE),
       criterio_contaminacion = case_when(
-        contaminada_por_tph & contaminada_por_proporcion ~ "Ambos criterios",
-        contaminada_por_tph ~ "Solo TPH promedio",
-        contaminada_por_proporcion ~ "Solo proporción",
-        TRUE ~ "No contaminada"
+        impactada_por_tph & impactada_por_proporcion ~ "Ambos criterios",
+        impactada_por_tph ~ "Solo TPH promedio",
+        impactada_por_proporcion ~ "Solo proporción",
+        TRUE ~ "No impactada"
       )
     ) %>%
-    select(-prop_decimal, -contaminada_por_tph, -contaminada_por_proporcion) %>%
+    select(-prop_decimal, -impactada_por_tph, -impactada_por_proporcion) %>%
     relocate(criterio_contaminacion, COD_UNIC, LOCACION, AREA, tph_celda, puntos_superan, prop_superan_pct, .before = part_id) %>%
     rename(ESTE = X, NORTE = Y)
   

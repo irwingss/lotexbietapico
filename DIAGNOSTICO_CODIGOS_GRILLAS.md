@@ -2,7 +2,7 @@
 
 ## Problema Reportado
 
-Los códigos de grillas en la sección "📋 Códigos de Elementos Contaminados" aparecen como:
+Los códigos de grillas en la sección "📋 Códigos de Elementos impactados" aparecen como:
 - `BAT-LA07_SUE-BAT-LA07-927_025`
 
 Cuando deberían ser:

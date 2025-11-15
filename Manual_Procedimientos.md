@@ -111,7 +111,7 @@ Esta aproximación metodológica maximiza la eficiencia del diseño muestral al 
 ### 3.3. Aplicaciones Científicas
 
 **3.3.1. Estudios de Contaminación Ambiental:**
-- Caracterización de suelos contaminados con representatividad espacial
+- Caracterización de suelos impactados con representatividad espacial
 - Monitoreo de calidad de aguas subterráneas en áreas extensas
 - Evaluación de impactos ambientales en ecosistemas terrestres
 
@@ -501,7 +501,7 @@ Columnas Obligatorias:
 
 *Áreas de Especialización:*
 - **Ciencias Ambientales:** Muestreo de suelos, aguas y sedimentos
-- **Ingeniería Ambiental:** Caracterización de sitios contaminados
+- **Ingeniería Ambiental:** Caracterización de sitios impactados
 - **Geología Aplicada:** Exploración y evaluación de recursos
 - **Planificación Territorial:** Inventarios de recursos naturales
 

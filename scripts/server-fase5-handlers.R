@@ -50,7 +50,7 @@ output$resumen_puntos_huerfanos <- renderPrint({
     cat("❌ IMPACTO\n")
     cat("───────────────────────────────────────────\n")
     cat("Estos puntos NO aparecen en:\n")
-    cat("  • Tabla 'Grillas Contaminadas'\n")
+    cat("  • Tabla 'Grillas impactadas'\n")
     cat("  • Tabla 'Todas las Grillas'\n")
     cat("  • Análisis por Celdas\n")
     cat("  • Análisis por Locaciones\n")
@@ -309,12 +309,12 @@ output$resumen_celdas_analisis <- renderPrint({
   prom_celdas <- promedios_celdas_resultado()
   umbral <- input$umbral_tph
   
-  contam_tph <- sum(prom_celdas$contaminada_por_tph == "Sí", na.rm = TRUE)
-  contam_prop <- sum(prom_celdas$contaminada_por_proporcion == "Sí", na.rm = TRUE)
+  contam_tph <- sum(prom_celdas$impactada_por_tph == "Sí", na.rm = TRUE)
+  contam_prop <- sum(prom_celdas$impactada_por_proporcion == "Sí", na.rm = TRUE)
   
-  # Contaminadas únicas (ambos criterios)
+  # impactadas únicas (ambos criterios)
   celdas_contam_unicas <- prom_celdas %>%
-    filter(contaminada_por_tph == "Sí" | contaminada_por_proporcion == "Sí") %>%
+    filter(impactada_por_tph == "Sí" | impactada_por_proporcion == "Sí") %>%
     pull(CELDA) %>%
     unique() %>%
     sort()
@@ -322,10 +322,10 @@ output$resumen_celdas_analisis <- renderPrint({
   cat("ANÁLISIS POR CELDAS\n")
   cat("===================\n\n")
   cat("Total de celdas:", nrow(prom_celdas), "\n")
-  cat("Contaminadas por TPH promedio:", contam_tph, "\n")
-  cat("Contaminadas por proporción (>50%):", contam_prop, "\n")
-  cat("Contaminadas únicas (ambos criterios):", length(celdas_contam_unicas), "\n\n")
-  cat("Códigos contaminados:\n")
+  cat("impactadas por TPH promedio:", contam_tph, "\n")
+  cat("impactadas por proporción (>50%):", contam_prop, "\n")
+  cat("impactadas únicas (ambos criterios):", length(celdas_contam_unicas), "\n\n")
+  cat("Códigos impactados:\n")
   if (length(celdas_contam_unicas) > 0) {
     cat(paste(celdas_contam_unicas, collapse = ", "))
   }
@@ -349,7 +349,7 @@ output$tabla_promedios_celdas <- renderDT({
   formatStyle(
     "criterio_contaminacion",
     backgroundColor = styleEqual(
-      c("Ambos criterios", "Solo TPH promedio", "Solo proporción", "No contaminada"),
+      c("Ambos criterios", "Solo TPH promedio", "Solo proporción", "No impactada"),
       c("#dc3545", "#ff6b6b", "#ffa500", "#28a745")
     ),
     color = "white",
@@ -357,12 +357,12 @@ output$tabla_promedios_celdas <- renderDT({
   )
 })
 
-output$tabla_celdas_contaminadas <- renderDT({
+output$tabla_celdas_impactadas <- renderDT({
   req(promedios_celdas_resultado())
   
   prom_celdas <- promedios_celdas_resultado()
   celdas_contam <- prom_celdas %>%
-    filter(contaminada_por_tph == "Sí" | contaminada_por_proporcion == "Sí") %>%
+    filter(impactada_por_tph == "Sí" | impactada_por_proporcion == "Sí") %>%
     select(criterio_contaminacion, everything())
   
   # Encontrar índices de columnas TPH y prop_exceed (base 0 para JavaScript)
@@ -416,12 +416,12 @@ output$resumen_locaciones_analisis <- renderPrint({
   
   prom_loc <- promedios_locaciones_resultado()
   
-  contam_tph <- sum(prom_loc$contaminada_por_tph == "Sí", na.rm = TRUE)
-  contam_prop <- sum(prom_loc$contaminada_por_proporcion == "Sí", na.rm = TRUE)
+  contam_tph <- sum(prom_loc$impactada_por_tph == "Sí", na.rm = TRUE)
+  contam_prop <- sum(prom_loc$impactada_por_proporcion == "Sí", na.rm = TRUE)
   
-  # Contaminadas únicas (ambos criterios)
+  # impactadas únicas (ambos criterios)
   loc_contam_unicas <- prom_loc %>%
-    filter(contaminada_por_tph == "Sí" | contaminada_por_proporcion == "Sí") %>%
+    filter(impactada_por_tph == "Sí" | impactada_por_proporcion == "Sí") %>%
     pull(LOCACION) %>%
     unique() %>%
     sort()
@@ -429,10 +429,10 @@ output$resumen_locaciones_analisis <- renderPrint({
   cat("ANÁLISIS POR LOCACIONES\n")
   cat("=======================\n\n")
   cat("Total de locaciones:", nrow(prom_loc), "\n")
-  cat("Contaminadas por TPH promedio:", contam_tph, "\n")
-  cat("Contaminadas por proporción (>50%):", contam_prop, "\n")
-  cat("Contaminadas únicas (ambos criterios):", length(loc_contam_unicas), "\n\n")
-  cat("Códigos contaminados:\n")
+  cat("impactadas por TPH promedio:", contam_tph, "\n")
+  cat("impactadas por proporción (>50%):", contam_prop, "\n")
+  cat("impactadas únicas (ambos criterios):", length(loc_contam_unicas), "\n\n")
+  cat("Códigos impactados:\n")
   if (length(loc_contam_unicas) > 0) {
     cat(paste(loc_contam_unicas, collapse = ", "))
   }
@@ -456,7 +456,7 @@ output$tabla_promedios_locaciones <- renderDT({
   formatStyle(
     "criterio_contaminacion",
     backgroundColor = styleEqual(
-      c("Ambos criterios", "Solo TPH promedio", "Solo proporción", "No contaminada"),
+      c("Ambos criterios", "Solo TPH promedio", "Solo proporción", "No impactada"),
       c("#dc3545", "#ff6b6b", "#ffa500", "#28a745")
     ),
     color = "white",
@@ -464,12 +464,12 @@ output$tabla_promedios_locaciones <- renderDT({
   )
 })
 
-output$tabla_locaciones_contaminadas <- renderDT({
+output$tabla_locaciones_impactadas <- renderDT({
   req(promedios_locaciones_resultado())
   
   prom_loc <- promedios_locaciones_resultado()
   loc_contam <- prom_loc %>%
-    filter(contaminada_por_tph == "Sí" | contaminada_por_proporcion == "Sí") %>%
+    filter(impactada_por_tph == "Sí" | impactada_por_proporcion == "Sí") %>%
     select(criterio_contaminacion, everything())
   
   # Encontrar índices de columnas TPH y prop_exceed (base 0 para JavaScript)
@@ -576,7 +576,7 @@ observeEvent(input$generar_vertices_btn, {
         cat("==================================================================\n\n")
         
         if (length(superan_grilla) > 0) {
-          # Filtrar shapefile por las grillas contaminadas
+          # Filtrar shapefile por las grillas impactadas
           shp_grillas_filtrado <- shp_grillas %>% filter(COD_GRILLA %in% superan_grilla)
           
           if (nrow(shp_grillas_filtrado) > 0) {
@@ -668,43 +668,43 @@ observeEvent(input$generar_vertices_btn, {
     # ANÁLISIS UNIFICADO CON EXCLUSIÓN JERÁRQUICA
     # ========================================================================== #
     
-    # Paso 1: Identificar locaciones contaminadas (ambos criterios)
-    locaciones_contaminadas <- character(0)
+    # Paso 1: Identificar locaciones impactadas (ambos criterios)
+    locaciones_impactadas <- character(0)
     if (!is.null(promedios_locaciones_resultado())) {
       prom_loc <- promedios_locaciones_resultado()
-      locaciones_contaminadas <- prom_loc %>%
-        filter(contaminada_por_tph == "Sí" | contaminada_por_proporcion == "Sí") %>%
+      locaciones_impactadas <- prom_loc %>%
+        filter(impactada_por_tph == "Sí" | impactada_por_proporcion == "Sí") %>%
         pull(LOCACION) %>%
         unique()
     }
     
-    # Paso 2: Identificar celdas contaminadas (ambos criterios)
-    celdas_contaminadas <- character(0)
+    # Paso 2: Identificar celdas impactadas (ambos criterios)
+    celdas_impactadas <- character(0)
     if (!is.null(promedios_celdas_resultado())) {
       prom_celd <- promedios_celdas_resultado()
-      celdas_contaminadas <- prom_celd %>%
-        filter(contaminada_por_tph == "Sí" | contaminada_por_proporcion == "Sí") %>%
+      celdas_impactadas <- prom_celd %>%
+        filter(impactada_por_tph == "Sí" | impactada_por_proporcion == "Sí") %>%
         pull(CELDA) %>%
         unique()
     }
     
     # Paso 3: Filtrar GRILLAS para análisis unificado
-    # Excluir grillas que pertenecen a locaciones o celdas contaminadas
+    # Excluir grillas que pertenecen a locaciones o celdas impactadas
     if (!is.null(vertices_grillas_resultado())) {
       vert_grillas_orig <- vertices_grillas_resultado()
       
       # Identificar grillas a excluir
       vert_grillas_filtrado <- vert_grillas_orig %>%
         filter(
-          # NO pertenece a locación contaminada
-          !(LOCACION %in% locaciones_contaminadas)
+          # NO pertenece a locación impactada
+          !(LOCACION %in% locaciones_impactadas)
         )
       
-      # Si tenemos información de celdas, también excluir grillas de celdas contaminadas
-      if ("CELDA" %in% names(datos) && length(celdas_contaminadas) > 0) {
+      # Si tenemos información de celdas, también excluir grillas de celdas impactadas
+      if ("CELDA" %in% names(datos) && length(celdas_impactadas) > 0) {
         # Obtener mapeo GRILLA -> CELDA de los datos originales
         grillas_en_celdas_contam <- datos %>%
-          filter(!is.na(CELDA), CELDA %in% celdas_contaminadas) %>%
+          filter(!is.na(CELDA), CELDA %in% celdas_impactadas) %>%
           pull(GRILLA) %>%
           unique()
         
@@ -723,7 +723,7 @@ observeEvent(input$generar_vertices_btn, {
     
     # Paso 4: Filtrar CELDAS para análisis unificado
     # Combinar vértices de celdas TPH y Proporción
-    # Excluir celdas que pertenecen a locaciones contaminadas
+    # Excluir celdas que pertenecen a locaciones impactadas
     vertices_celdas_combinados <- NULL
     
     if (!is.null(vertices_celdas_tph_resultado()) && !is.null(vertices_celdas_prop_resultado())) {
@@ -740,9 +740,9 @@ observeEvent(input$generar_vertices_btn, {
     }
     
     if (!is.null(vertices_celdas_combinados)) {
-      # Excluir celdas de locaciones contaminadas
+      # Excluir celdas de locaciones impactadas
       vert_celdas_filtrado <- vertices_celdas_combinados %>%
-        filter(!(LOCACION %in% locaciones_contaminadas))
+        filter(!(LOCACION %in% locaciones_impactadas))
       
       vertices_celdas_unificado(vert_celdas_filtrado)
       
@@ -803,7 +803,7 @@ output$tabla_vertices_grillas <- renderDT({
   formatStyle(
     "criterio_contaminacion",
     backgroundColor = styleEqual(
-      c("Supera umbral TPH", "No contaminada"),
+      c("Supera umbral TPH", "No impactada"),
       c("#dc3545", "#28a745")
     ),
     color = "white",
@@ -824,7 +824,7 @@ output$tabla_vertices_celdas <- renderDT({
   formatStyle(
     "criterio_contaminacion",
     backgroundColor = styleEqual(
-      c("Ambos criterios", "Solo TPH promedio", "Solo proporción", "No contaminada"),
+      c("Ambos criterios", "Solo TPH promedio", "Solo proporción", "No impactada"),
       c("#dc3545", "#ff6b6b", "#ffa500", "#28a745")
     ),
     color = "white",
@@ -836,7 +836,7 @@ output$tabla_vertices_celdas <- renderDT({
 # RESUMEN EJECUTIVO DE ANÁLISIS UNIFICADO
 # ============================================================================ #
 
-# Resumen de conteos de elementos contaminados
+# Resumen de conteos de elementos impactados
 output$resumen_unificado_conteos <- renderUI({
   # Verificar que hay datos de vértices generados
   tiene_grillas <- !is.null(vertices_grillas_unificado()) && nrow(vertices_grillas_unificado()) > 0
@@ -861,13 +861,13 @@ output$resumen_unificado_conteos <- renderUI({
   n_grillas <- if (tiene_grillas) length(unique(vertices_grillas_unificado()$COD_GRILLA)) else 0
   n_celdas <- if (tiene_celdas) length(unique(vertices_celdas_unificado()$COD_UNIC)) else 0
   
-  # Contar locaciones contaminadas
+  # Contar locaciones impactadas
   n_locaciones <- 0
   if (tiene_locaciones) {
     loc_data <- promedios_locaciones_resultado()
     if ("criterio_contaminacion" %in% names(loc_data)) {
       n_locaciones <- loc_data %>% 
-        filter(criterio_contaminacion != "No contaminada") %>% 
+        filter(criterio_contaminacion != "No impactada") %>% 
         nrow()
     }
   }
@@ -886,12 +886,12 @@ output$resumen_unificado_conteos <- renderUI({
         tags$tr(
           tags$td("📍 Grillas", style = "font-weight: bold;"),
           tags$td(n_grillas, style = "text-align: center; font-size: 1.2em; font-weight: bold; color: #d9534f;"),
-          tags$td("Grillas individuales que requieren remediación (no pertenecen a celdas/locaciones contaminadas)")
+          tags$td("Grillas individuales que requieren remediación (no pertenecen a celdas/locaciones impactadas)")
         ),
         tags$tr(
           tags$td("🔲 Celdas", style = "font-weight: bold;"),
           tags$td(n_celdas, style = "text-align: center; font-size: 1.2em; font-weight: bold; color: #f0ad4e;"),
-          tags$td("Celdas completas que requieren remediación (no pertenecen a locaciones contaminadas)")
+          tags$td("Celdas completas que requieren remediación (no pertenecen a locaciones impactadas)")
         ),
         tags$tr(
           tags$td("🏢 Locaciones", style = "font-weight: bold;"),
@@ -909,7 +909,7 @@ output$resumen_unificado_conteos <- renderUI({
   )
 })
 
-# Lista de códigos de grillas contaminadas
+# Lista de códigos de grillas impactadas
 output$lista_grillas_unificado <- renderUI({
   if (is.null(vertices_grillas_unificado())) {
     return(p("⏳ Genere vértices primero", style = "color: #999; font-style: italic;"))
@@ -936,7 +936,7 @@ output$lista_grillas_unificado <- renderUI({
   )
 })
 
-# Lista de códigos de celdas contaminadas
+# Lista de códigos de celdas impactadas
 output$lista_celdas_unificado <- renderUI({
   if (is.null(vertices_celdas_unificado())) {
     return(p("⏳ Genere vértices primero", style = "color: #999; font-style: italic;"))
@@ -963,8 +963,8 @@ output$lista_celdas_unificado <- renderUI({
   )
 })
 
-# Lista de códigos de locaciones contaminadas
-output$lista_locaciones_contaminadas <- renderUI({
+# Lista de códigos de locaciones impactadas
+output$lista_locaciones_impactadas <- renderUI({
   if (is.null(promedios_locaciones_resultado())) {
     return(p("⏳ Genere análisis primero", style = "color: #999; font-style: italic;"))
   }
@@ -976,7 +976,7 @@ output$lista_locaciones_contaminadas <- renderUI({
   }
   
   locaciones <- loc_data %>% 
-    filter(criterio_contaminacion != "No contaminada") %>% 
+    filter(criterio_contaminacion != "No impactada") %>% 
     pull(LOCACION)
   
   if (length(locaciones) == 0) {
@@ -1018,7 +1018,7 @@ output$tabla_vertices_grillas_unificado <- renderDT({
   formatStyle(
     "criterio_contaminacion",
     backgroundColor = styleEqual(
-      c("Supera umbral TPH", "No contaminada"),
+      c("Supera umbral TPH", "No impactada"),
       c("#dc3545", "#28a745")
     ),
     color = "white",
@@ -1047,7 +1047,7 @@ output$tabla_vertices_celdas_unificado <- renderDT({
   formatStyle(
     "criterio_contaminacion",
     backgroundColor = styleEqual(
-      c("Ambos criterios", "Solo TPH promedio", "Solo proporción", "No contaminada"),
+      c("Ambos criterios", "Solo TPH promedio", "Solo proporción", "No impactada"),
       c("#dc3545", "#ff6b6b", "#ffa500", "#28a745")
     ),
     color = "white",
@@ -1069,26 +1069,26 @@ output$reporte_final_resultados <- renderPrint({
   grillas_contam <- datos %>% filter(TPH > umbral)
   cat("NIVEL GRILLA\n")
   cat("Total puntos:", nrow(datos), "\n")
-  cat("Contaminados:", nrow(grillas_contam), "\n\n")
+  cat("impactados:", nrow(grillas_contam), "\n\n")
   
   if (!is.null(promedios_celdas_resultado())) {
     prom_celdas <- promedios_celdas_resultado()
     cat("NIVEL CELDA\n")
     cat("Total celdas:", nrow(prom_celdas), "\n")
-    cat("Contaminadas (TPH):", sum(prom_celdas$contaminada_por_tph == "Sí"), "\n")
-    cat("Contaminadas (Prop):", sum(prom_celdas$contaminada_por_proporcion == "Sí"), "\n\n")
+    cat("impactadas (TPH):", sum(prom_celdas$impactada_por_tph == "Sí"), "\n")
+    cat("impactadas (Prop):", sum(prom_celdas$impactada_por_proporcion == "Sí"), "\n\n")
   }
   
   if (!is.null(promedios_locaciones_resultado())) {
     prom_loc <- promedios_locaciones_resultado()
     cat("NIVEL LOCACIÓN\n")
     cat("Total locaciones:", nrow(prom_loc), "\n")
-    cat("Contaminadas (TPH):", sum(prom_loc$contaminada_por_tph == "Sí"), "\n")
-    cat("Contaminadas (Prop):", sum(prom_loc$contaminada_por_proporcion == "Sí"), "\n")
+    cat("impactadas (TPH):", sum(prom_loc$impactada_por_tph == "Sí"), "\n")
+    cat("impactadas (Prop):", sum(prom_loc$impactada_por_proporcion == "Sí"), "\n")
   }
 })
 
-output$codigos_grillas_contaminadas <- renderPrint({
+output$codigos_grillas_impactadas <- renderPrint({
   req(muestra_enriquecida())
   datos <- muestra_enriquecida()
   umbral <- input$umbral_tph
@@ -1101,12 +1101,12 @@ output$codigos_grillas_contaminadas <- renderPrint({
   }
 })
 
-output$codigos_celdas_contaminadas <- renderPrint({
+output$codigos_celdas_impactadas <- renderPrint({
   req(promedios_celdas_resultado())
   prom_celdas <- promedios_celdas_resultado()
   
-  cod_tph <- prom_celdas %>% filter(contaminada_por_tph == "Sí") %>% pull(CELDA)
-  cod_prop <- prom_celdas %>% filter(contaminada_por_proporcion == "Sí") %>% pull(CELDA)
+  cod_tph <- prom_celdas %>% filter(impactada_por_tph == "Sí") %>% pull(CELDA)
+  cod_prop <- prom_celdas %>% filter(impactada_por_proporcion == "Sí") %>% pull(CELDA)
   
   cat("Por TPH:", length(cod_tph), "\n")
   if (length(cod_tph) > 0) cat(paste(cod_tph, collapse = ", "), "\n\n")
@@ -1115,12 +1115,12 @@ output$codigos_celdas_contaminadas <- renderPrint({
   if (length(cod_prop) > 0) cat(paste(cod_prop, collapse = ", "))
 })
 
-output$codigos_locaciones_contaminadas <- renderPrint({
+output$codigos_locaciones_impactadas <- renderPrint({
   req(promedios_locaciones_resultado())
   prom_loc <- promedios_locaciones_resultado()
   
-  cod_tph <- prom_loc %>% filter(contaminada_por_tph == "Sí") %>% pull(LOCACION)
-  cod_prop <- prom_loc %>% filter(contaminada_por_proporcion == "Sí") %>% pull(LOCACION)
+  cod_tph <- prom_loc %>% filter(impactada_por_tph == "Sí") %>% pull(LOCACION)
+  cod_prop <- prom_loc %>% filter(impactada_por_proporcion == "Sí") %>% pull(LOCACION)
   
   cat("Por TPH:", length(cod_tph), "\n")
   if (length(cod_tph) > 0) cat(paste(cod_tph, collapse = ", "), "\n\n")
@@ -1149,9 +1149,9 @@ output$descargar_muestra_enriquecida_btn <- downloadHandler(
   }
 )
 
-output$descargar_grillas_contaminadas_btn <- downloadHandler(
+output$descargar_grillas_impactadas_btn <- downloadHandler(
   filename = function() {
-    generar_nombre_archivo_fase5("Grillas_Contaminadas")
+    generar_nombre_archivo_fase5("Grillas_impactadas")
   },
   content = function(file) {
     req(muestra_enriquecida())
@@ -1176,15 +1176,15 @@ output$descargar_promedios_celdas_btn <- downloadHandler(
   }
 )
 
-output$descargar_celdas_contaminadas_btn <- downloadHandler(
+output$descargar_celdas_impactadas_btn <- downloadHandler(
   filename = function() {
-    generar_nombre_archivo_fase5("Celdas_Contaminadas")
+    generar_nombre_archivo_fase5("Celdas_impactadas")
   },
   content = function(file) {
     req(promedios_celdas_resultado())
     prom_celdas <- promedios_celdas_resultado()
     celdas_contam <- prom_celdas %>%
-      filter(contaminada_por_tph == "Sí" | contaminada_por_proporcion == "Sí") %>%
+      filter(impactada_por_tph == "Sí" | impactada_por_proporcion == "Sí") %>%
       select(criterio_contaminacion, everything())
     openxlsx::write.xlsx(celdas_contam, file)
   }
@@ -1204,15 +1204,15 @@ output$descargar_promedios_locaciones_btn <- downloadHandler(
   }
 )
 
-output$descargar_locaciones_contaminadas_btn <- downloadHandler(
+output$descargar_locaciones_impactadas_btn <- downloadHandler(
   filename = function() {
-    generar_nombre_archivo_fase5("Locaciones_Contaminadas")
+    generar_nombre_archivo_fase5("Locaciones_impactadas")
   },
   content = function(file) {
     req(promedios_locaciones_resultado())
     prom_loc <- promedios_locaciones_resultado()
     loc_contam <- prom_loc %>%
-      filter(contaminada_por_tph == "Sí" | contaminada_por_proporcion == "Sí") %>%
+      filter(impactada_por_tph == "Sí" | impactada_por_proporcion == "Sí") %>%
       select(criterio_contaminacion, everything())
     openxlsx::write.xlsx(loc_contam, file)
   }
@@ -1220,7 +1220,7 @@ output$descargar_locaciones_contaminadas_btn <- downloadHandler(
 
 output$descargar_vertices_grillas_btn <- downloadHandler(
   filename = function() {
-    generar_nombre_archivo_fase5("Vertices_Grillas_Contaminadas")
+    generar_nombre_archivo_fase5("Vertices_Grillas_impactadas")
   },
   content = function(file) {
     req(vertices_grillas_resultado())
@@ -1320,7 +1320,7 @@ output$descargar_reporte_completo_btn <- downloadHandler(
     # Hoja 4: Todas las Grillas con criterio de contaminación
     umbral <- input$umbral_tph
     todas_grillas <- muestra_enriquecida() %>%
-      mutate(criterio_contaminacion = ifelse(TPH > umbral, "Supera umbral TPH", "No contaminada")) %>%
+      mutate(criterio_contaminacion = ifelse(TPH > umbral, "Supera umbral TPH", "No impactada")) %>%
       select(criterio_contaminacion, everything())
     
     openxlsx::addWorksheet(wb, "Todas_las_Grillas")
@@ -1331,10 +1331,10 @@ output$descargar_reporte_completo_btn <- downloadHandler(
   }
 )
 
-# Descargar reporte SOLO contaminadas (filtrado)
-output$descargar_reporte_solo_contaminadas_btn <- downloadHandler(
+# Descargar reporte SOLO impactadas (filtrado)
+output$descargar_reporte_solo_impactadas_btn <- downloadHandler(
   filename = function() {
-    generar_nombre_archivo_fase5("Reporte_SOLO_CONTAMINADAS")
+    generar_nombre_archivo_fase5("Reporte_SOLO_impactadaS")
   },
   content = function(file) {
     req(muestra_enriquecida())
@@ -1343,51 +1343,51 @@ output$descargar_reporte_solo_contaminadas_btn <- downloadHandler(
     wb <- openxlsx::createWorkbook()
     umbral <- input$umbral_tph
     
-    # ========== Hoja 1: GRILLAS CONTAMINADAS ==========
-    grillas_contaminadas <- muestra_enriquecida() %>%
-      mutate(criterio_contaminacion = ifelse(TPH > umbral, "Supera umbral TPH", "No contaminada")) %>%
-      filter(criterio_contaminacion != "No contaminada") %>%
+    # ========== Hoja 1: GRILLAS impactadaS ==========
+    grillas_impactadas <- muestra_enriquecida() %>%
+      mutate(criterio_contaminacion = ifelse(TPH > umbral, "Supera umbral TPH", "No impactada")) %>%
+      filter(criterio_contaminacion != "No impactada") %>%
       select(criterio_contaminacion, everything())
     
-    if (nrow(grillas_contaminadas) > 0) {
-      openxlsx::addWorksheet(wb, "Grillas_Contaminadas")
-      openxlsx::writeData(wb, "Grillas_Contaminadas", grillas_contaminadas)
+    if (nrow(grillas_impactadas) > 0) {
+      openxlsx::addWorksheet(wb, "Grillas_impactadas")
+      openxlsx::writeData(wb, "Grillas_impactadas", grillas_impactadas)
     }
     
-    # ========== Hoja 2: CELDAS CONTAMINADAS ==========
+    # ========== Hoja 2: CELDAS impactadaS ==========
     if (!is.null(promedios_celdas_resultado())) {
-      celdas_contaminadas <- promedios_celdas_resultado() %>%
-        filter(criterio_contaminacion != "No contaminada") %>%
+      celdas_impactadas <- promedios_celdas_resultado() %>%
+        filter(criterio_contaminacion != "No impactada") %>%
         select(criterio_contaminacion, everything())
       
-      if (nrow(celdas_contaminadas) > 0) {
-        openxlsx::addWorksheet(wb, "Celdas_Contaminadas")
-        openxlsx::writeData(wb, "Celdas_Contaminadas", celdas_contaminadas)
+      if (nrow(celdas_impactadas) > 0) {
+        openxlsx::addWorksheet(wb, "Celdas_impactadas")
+        openxlsx::writeData(wb, "Celdas_impactadas", celdas_impactadas)
       }
     }
     
-    # ========== Hoja 3: LOCACIONES CONTAMINADAS ==========
+    # ========== Hoja 3: LOCACIONES impactadaS ==========
     if (!is.null(promedios_locaciones_resultado())) {
-      locaciones_contaminadas <- promedios_locaciones_resultado() %>%
-        filter(criterio_contaminacion != "No contaminada") %>%
+      locaciones_impactadas <- promedios_locaciones_resultado() %>%
+        filter(criterio_contaminacion != "No impactada") %>%
         select(criterio_contaminacion, everything())
       
-      if (nrow(locaciones_contaminadas) > 0) {
-        openxlsx::addWorksheet(wb, "Locaciones_Contaminadas")
-        openxlsx::writeData(wb, "Locaciones_Contaminadas", locaciones_contaminadas)
+      if (nrow(locaciones_impactadas) > 0) {
+        openxlsx::addWorksheet(wb, "Locaciones_impactadas")
+        openxlsx::writeData(wb, "Locaciones_impactadas", locaciones_impactadas)
       }
     }
     
     # ========== Hoja 4: RESUMEN EJECUTIVO ==========
     resumen_data <- data.frame(
       Nivel = c("Grillas", "Celdas", "Locaciones"),
-      Total_Contaminadas = c(
-        if (exists("grillas_contaminadas")) nrow(grillas_contaminadas) else 0,
+      Total_impactadas = c(
+        if (exists("grillas_impactadas")) nrow(grillas_impactadas) else 0,
         if (!is.null(promedios_celdas_resultado())) {
-          sum(promedios_celdas_resultado()$criterio_contaminacion != "No contaminada")
+          sum(promedios_celdas_resultado()$criterio_contaminacion != "No impactada")
         } else 0,
         if (!is.null(promedios_locaciones_resultado())) {
-          sum(promedios_locaciones_resultado()$criterio_contaminacion != "No contaminada")
+          sum(promedios_locaciones_resultado()$criterio_contaminacion != "No impactada")
         } else 0
       ),
       Umbral_TPH = rep(umbral, 3),
@@ -1416,16 +1416,16 @@ output$descargar_reporte_solo_contaminadas_btn <- downloadHandler(
 )
 
 # ============================================================================ #
-# DESCARGAR SHAPEFILES CONTAMINADOS CON LÓGICA JERÁRQUICA
+# DESCARGAR SHAPEFILES impactados CON LÓGICA JERÁRQUICA
 # ============================================================================ #
-output$descargar_shapefiles_contaminados_btn <- downloadHandler(
+output$descargar_shapefiles_impactados_btn <- downloadHandler(
   filename = function() {
     codigo_exp <- if (!is.null(input$codigo_expediente) && input$codigo_expediente != "") {
       paste0(input$codigo_expediente, "_")
     } else {
       ""
     }
-    paste0(codigo_exp, "Shapefiles_Contaminados_UNIFICADO-", Sys.Date(), ".zip")
+    paste0(codigo_exp, "Shapefiles_impactados_UNIFICADO-", Sys.Date(), ".zip")
   },
   content = function(file) {
     # Requiere que se hayan generado los vértices unificados
@@ -1604,20 +1604,20 @@ output$descargar_shapefiles_contaminados_btn <- downloadHandler(
       
       # Verificar que se creó al menos un ZIP individual
       if (length(archivos_zip_individuales) == 0) {
-        showNotification("No hay shapefiles para exportar después de aplicar exclusión jerárquica. Todas las grillas/celdas pertenecen a niveles superiores contaminados.", type = "warning", duration = 10)
+        showNotification("No hay shapefiles para exportar después de aplicar exclusión jerárquica. Todas las grillas/celdas pertenecen a niveles superiores impactados.", type = "warning", duration = 10)
         
         # Crear archivo de texto explicativo en zips_dir
         mensaje_path <- file.path(zips_dir, "INFORMACION.txt")
         writeLines(c(
           "═══════════════════════════════════════════════════════════════",
-          "  SHAPEFILES CONTAMINADOS CON EXCLUSIÓN JERÁRQUICA",
+          "  SHAPEFILES impactados CON EXCLUSIÓN JERÁRQUICA",
           paste("  Generado:", Sys.time()),
           "═══════════════════════════════════════════════════════════════",
           "",
           "ℹ️  NO HAY SHAPEFILES INDIVIDUALES PARA EXPORTAR",
           "───────────────────────────────────────────────────────────────",
           "",
-          "Todas las grillas y celdas contaminadas pertenecen a:",
+          "Todas las grillas y celdas impactadas pertenecen a:",
           "  • Locaciones que se remediarán completas, o",
           "  • Celdas que se remediarán completas",
           "",
@@ -1650,7 +1650,7 @@ output$descargar_shapefiles_contaminados_btn <- downloadHandler(
       }
       
     }, error = function(e) {
-      registrar_error(e$message, "Descarga shapefiles contaminados")
+      registrar_error(e$message, "Descarga shapefiles impactados")
       showNotification(paste("Error al generar shapefiles:", e$message), type = "error", duration = 10)
     })
   }
@@ -1660,31 +1660,31 @@ output$descargar_shapefiles_contaminados_btn <- downloadHandler(
 # OUTPUTS PARA PESTAÑA "SIN ANÁLISIS JERÁRQUICO"
 # ============================================================================ #
 
-# Resumen de conteos SIN jerarquía (todos los elementos contaminados)
+# Resumen de conteos SIN jerarquía (todos los elementos impactados)
 output$resumen_sin_jerarquia_conteos <- renderUI({
   # Verificar que hay datos
   req(muestra_enriquecida())
   
   umbral <- input$umbral_tph
   
-  # Contar grillas contaminadas (todas, sin filtro)
+  # Contar grillas impactadas (todas, sin filtro)
   n_grillas <- muestra_enriquecida() %>%
     filter(TPH > umbral) %>%
     nrow()
   
-  # Contar celdas contaminadas (todas, sin filtro)
+  # Contar celdas impactadas (todas, sin filtro)
   n_celdas <- 0
   if (!is.null(promedios_celdas_resultado())) {
     n_celdas <- promedios_celdas_resultado() %>%
-      filter(criterio_contaminacion != "No contaminada") %>%
+      filter(criterio_contaminacion != "No impactada") %>%
       nrow()
   }
   
-  # Contar locaciones contaminadas
+  # Contar locaciones impactadas
   n_locaciones <- 0
   if (!is.null(promedios_locaciones_resultado())) {
     n_locaciones <- promedios_locaciones_resultado() %>%
-      filter(criterio_contaminacion != "No contaminada") %>%
+      filter(criterio_contaminacion != "No impactada") %>%
       nrow()
   }
   
@@ -1707,18 +1707,18 @@ output$resumen_sin_jerarquia_conteos <- renderUI({
         tags$tr(
           tags$td("🔲 Celdas", style = "font-weight: bold;"),
           tags$td(n_celdas, style = "text-align: center; font-size: 1.2em; font-weight: bold; color: #f0ad4e;"),
-          tags$td("Todas las celdas contaminadas (incluye celdas de locaciones contaminadas)")
+          tags$td("Todas las celdas impactadas (incluye celdas de locaciones impactadas)")
         ),
         tags$tr(
           tags$td("🏢 Locaciones", style = "font-weight: bold;"),
           tags$td(n_locaciones, style = "text-align: center; font-size: 1.2em; font-weight: bold; color: #5bc0de;"),
-          tags$td("Todas las locaciones contaminadas")
+          tags$td("Todas las locaciones impactadas")
         ),
         tags$tr(style = "background-color: #f9f9f9; font-weight: bold;",
           tags$td("TOTAL ELEMENTOS", style = "text-align: right;"),
           tags$td(n_grillas + n_celdas + n_locaciones, 
                   style = "text-align: center; font-size: 1.3em; color: #333;"),
-          tags$td("Total de elementos contaminados (puede haber sobreposición)")
+          tags$td("Total de elementos impactados (puede haber sobreposición)")
         )
       )
     )
@@ -1754,7 +1754,7 @@ output$lista_celdas_sin_jerarquia <- renderUI({
   req(promedios_celdas_resultado())
   
   celdas <- promedios_celdas_resultado() %>%
-    filter(criterio_contaminacion != "No contaminada") %>%
+    filter(criterio_contaminacion != "No impactada") %>%
     pull(CELDA) %>%
     unique() %>%
     sort()
@@ -1776,7 +1776,7 @@ output$lista_locaciones_sin_jerarquia <- renderUI({
   req(promedios_locaciones_resultado())
   
   locaciones <- promedios_locaciones_resultado() %>%
-    filter(criterio_contaminacion != "No contaminada") %>%
+    filter(criterio_contaminacion != "No impactada") %>%
     pull(LOCACION) %>%
     unique() %>%
     sort()
@@ -1794,12 +1794,12 @@ output$lista_locaciones_sin_jerarquia <- renderUI({
 })
 
 # ============================================================================ #
-# DESCARGAR REPORTE CONTAMINADAS CON JERARQUÍA
+# DESCARGAR REPORTE impactadaS CON JERARQUÍA
 # ============================================================================ #
 
 output$descargar_reporte_jerarquia_btn <- downloadHandler(
   filename = function() {
-    generar_nombre_archivo_fase5("Reporte_CONTAMINADAS_JERARQUIA")
+    generar_nombre_archivo_fase5("Reporte_impactadaS_JERARQUIA")
   },
   content = function(file) {
     req(vertices_grillas_unificado())
@@ -1811,8 +1811,8 @@ output$descargar_reporte_jerarquia_btn <- downloadHandler(
       wb <- openxlsx::createWorkbook()
       umbral <- input$umbral_tph
       
-      # ========== Hoja 1: GRILLAS CONTAMINADAS (CON JERARQUÍA) ==========
-      # Solo grillas que NO pertenecen a celdas o locaciones contaminadas
+      # ========== Hoja 1: GRILLAS impactadaS (CON JERARQUÍA) ==========
+      # Solo grillas que NO pertenecen a celdas o locaciones impactadas
       if (!is.null(vertices_grillas_unificado())) {
         grillas_jerarquia <- muestra_enriquecida() %>%
           filter(GRILLA %in% unique(vertices_grillas_unificado()$COD_GRILLA)) %>%
@@ -1825,15 +1825,15 @@ output$descargar_reporte_jerarquia_btn <- downloadHandler(
         }
       }
       
-      # ========== Hoja 2: CELDAS CONTAMINADAS (CON JERARQUÍA) ==========
-      # Solo celdas que NO pertenecen a locaciones contaminadas
+      # ========== Hoja 2: CELDAS impactadaS (CON JERARQUÍA) ==========
+      # Solo celdas que NO pertenecen a locaciones impactadas
       if (!is.null(vertices_celdas_unificado()) && !is.null(promedios_celdas_resultado())) {
         # Extraer códigos únicos de celdas después de exclusión jerárquica
         celdas_jerarquia_codigos <- unique(vertices_celdas_unificado()$COD_UNIC)
         
         celdas_jerarquia <- promedios_celdas_resultado() %>%
           filter(CELDA %in% celdas_jerarquia_codigos) %>%
-          filter(criterio_contaminacion != "No contaminada") %>%
+          filter(criterio_contaminacion != "No impactada") %>%
           select(criterio_contaminacion, everything())
         
         if (nrow(celdas_jerarquia) > 0) {
@@ -1842,31 +1842,31 @@ output$descargar_reporte_jerarquia_btn <- downloadHandler(
         }
       }
       
-      # ========== Hoja 3: LOCACIONES CONTAMINADAS ==========
-      # Locaciones contaminadas (nivel más alto, siempre se incluye)
+      # ========== Hoja 3: LOCACIONES impactadaS ==========
+      # Locaciones impactadas (nivel más alto, siempre se incluye)
       if (!is.null(promedios_locaciones_resultado())) {
-        locaciones_contaminadas <- promedios_locaciones_resultado() %>%
-          filter(criterio_contaminacion != "No contaminada") %>%
+        locaciones_impactadas <- promedios_locaciones_resultado() %>%
+          filter(criterio_contaminacion != "No impactada") %>%
           select(criterio_contaminacion, everything())
         
-        if (nrow(locaciones_contaminadas) > 0) {
+        if (nrow(locaciones_impactadas) > 0) {
           openxlsx::addWorksheet(wb, "Locaciones")
-          openxlsx::writeData(wb, "Locaciones", locaciones_contaminadas)
+          openxlsx::writeData(wb, "Locaciones", locaciones_impactadas)
         }
       }
       
       # ========== Hoja 4: RESUMEN EJECUTIVO CON JERARQUÍA ==========
       n_grillas_jer <- if (exists("grillas_jerarquia")) nrow(grillas_jerarquia) else 0
       n_celdas_jer <- if (exists("celdas_jerarquia")) nrow(celdas_jerarquia) else 0
-      n_locaciones_jer <- if (exists("locaciones_contaminadas")) nrow(locaciones_contaminadas) else 0
+      n_locaciones_jer <- if (exists("locaciones_impactadas")) nrow(locaciones_impactadas) else 0
       
       resumen_data <- data.frame(
         Nivel = c("📍 Grillas Individuales", "🔲 Celdas Completas", "🏢 Locaciones Completas", "═ TOTAL ÁREAS DISCRETAS"),
         Cantidad = c(n_grillas_jer, n_celdas_jer, n_locaciones_jer, n_grillas_jer + n_celdas_jer + n_locaciones_jer),
         Descripcion = c(
-          "Grillas que NO pertenecen a celdas/locaciones contaminadas",
-          "Celdas que NO pertenecen a locaciones contaminadas",
-          "Locaciones completas contaminadas",
+          "Grillas que NO pertenecen a celdas/locaciones impactadas",
+          "Celdas que NO pertenecen a locaciones impactadas",
+          "Locaciones completas impactadas",
           "Total de áreas sujetas a remediación (sin duplicación)"
         ),
         Umbral_TPH = rep(umbral, 4),
@@ -1910,15 +1910,15 @@ output$descargar_reporte_jerarquia_btn <- downloadHandler(
           paste("Generado el:", Sys.time()),
           "",
           "Prima LOCACIÓN sobre CELDAS, y CELDAS sobre GRILLAS",
-          "Si una LOCACIÓN está contaminada, se remedia COMPLETA (no se listan sus celdas/grillas)",
-          "Si una CELDA está contaminada (y su locación NO), se remedia COMPLETA (no se listan sus grillas)",
-          "Solo se listan GRILLAS individuales si NO pertenecen a celdas/locaciones contaminadas",
+          "Si una LOCACIÓN está impactada, se remedia COMPLETA (no se listan sus celdas/grillas)",
+          "Si una CELDA está impactada (y su locación NO), se remedia COMPLETA (no se listan sus grillas)",
+          "Solo se listan GRILLAS individuales si NO pertenecen a celdas/locaciones impactadas",
           "",
           "Evita duplicación: no acusa grillas de celdas que ya se van a remediar completas",
           "",
-          "Si Locación A tiene 3 celdas contaminadas, solo se reporta 'Locación A' (no sus 3 celdas)",
-          "Si Celda C-01 tiene 5 grillas contaminadas, solo se reporta 'Celda C-01' (no sus 5 grillas)",
-          "Solo si una grilla aislada está contaminada (sin celda/locación contaminada), se reporta individualmente",
+          "Si Locación A tiene 3 celdas impactadas, solo se reporta 'Locación A' (no sus 3 celdas)",
+          "Si Celda C-01 tiene 5 grillas impactadas, solo se reporta 'Celda C-01' (no sus 5 grillas)",
+          "Solo si una grilla aislada está impactada (sin celda/locación impactada), se reporta individualmente",
           ""
         )
       )
@@ -2186,14 +2186,14 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
         # Fila 1: Encabezados principales
         fila1_headers <- c(
           "Pozo/Locación",
-          "Celdas contaminadas",
+          "Celdas impactadas",
           "Código de los puntos que superaron el nivel de intervención dentro de la celda",
-          "Área de la celda contaminada",
+          "Área de la celda impactada",
           "Coordenadas de los vértices del perímetro del punto de muestreo que supera el Nivel de Intervención UTM WGS84, Zona 17M",
           "",  # Fusionado con anterior
           "",  # Fusionado con anterior
           "TPH mg/kg (Promedio ponderado)",
-          "Proporción de puntos contaminados"
+          "Proporción de puntos impactados"
         )
         
         # Fila 2: Sub-encabezados
@@ -2399,26 +2399,26 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
         tiene_datos <- TRUE
       }
       
-      # ========== Hoja 3: LOCACIONES CONTAMINADAS - FORMATO COMPLETO ==========
-      # Lista todas las celdas de cada locación contaminada
+      # ========== Hoja 3: LOCACIONES impactadaS - FORMATO COMPLETO ==========
+      # Lista todas las celdas de cada locación impactada
       if (!is.null(promedios_locaciones_resultado()) && !is.null(shp_celdas_data()) && !is.null(muestra_enriquecida())) {
-        locs_contaminadas <- promedios_locaciones_resultado() %>%
-          filter(criterio_contaminacion != "No contaminada")
+        locs_impactadas <- promedios_locaciones_resultado() %>%
+          filter(criterio_contaminacion != "No impactada")
         
-        if (nrow(locs_contaminadas) > 0) {
-          # Crear lista de códigos de puntos contaminados por locación
+        if (nrow(locs_impactadas) > 0) {
+          # Crear lista de códigos de puntos impactados por locación
           puntos_por_locacion <- muestra_enriquecida() %>%
             filter(TPH > input$umbral_tph) %>%
             group_by(LOCACION) %>%
             summarise(
-              puntos_contaminados = paste(sort(unique(PUNTO)), collapse = ", "),
+              puntos_impactados = paste(sort(unique(PUNTO)), collapse = ", "),
               .groups = "drop"
             )
           
-          # Unir puntos contaminados a locaciones
-          locs_contaminadas <- locs_contaminadas %>%
+          # Unir puntos impactados a locaciones
+          locs_impactadas <- locs_impactadas %>%
             left_join(puntos_por_locacion, by = "LOCACION") %>%
-            mutate(puntos_contaminados = ifelse(is.na(puntos_contaminados), "", puntos_contaminados))
+            mutate(puntos_impactados = ifelse(is.na(puntos_impactados), "", puntos_impactados))
           
           # Obtener shapefile de celdas con atributos
           # El shapefile ya tiene las columnas estandarizadas durante la carga
@@ -2445,22 +2445,22 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
             select(any_of(c(col_celda, "LOCACION", "AREA", "COD_PLANO"))) %>%
             rename(COD_CELDA = 1)  # Renombrar primera columna a COD_CELDA
           
-          # Crear tabla expandida: para cada locación contaminada, listar todas sus celdas
-          datos_locaciones <- locs_contaminadas %>%
-            select(LOCACION, puntos_contaminados, TPH, prop_exceed) %>%
+          # Crear tabla expandida: para cada locación impactada, listar todas sus celdas
+          datos_locaciones <- locs_impactadas %>%
+            select(LOCACION, puntos_impactados, TPH, prop_exceed) %>%
             inner_join(
               shp_celdas_attrs,
               by = "LOCACION",
               relationship = "many-to-many"
             ) %>%
             arrange(LOCACION, COD_CELDA) %>%
-            select(LOCACION, puntos_contaminados, COD_CELDA, any_of("COD_PLANO"), AREA, TPH, prop_exceed)
+            select(LOCACION, puntos_impactados, COD_CELDA, any_of("COD_PLANO"), AREA, TPH, prop_exceed)
           
           # Verificar que hay datos
           if (nrow(datos_locaciones) > 0) {
             
             # Crear worksheet
-            openxlsx::addWorksheet(wb, "Locaciones_Contaminadas")
+            openxlsx::addWorksheet(wb, "Locaciones_impactadas")
             
             # ========== ENCABEZADOS DINÁMICOS ==========
             # Detectar si COD_PLANO existe
@@ -2472,9 +2472,9 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
                 "Código de los puntos que superaron el nivel de intervención dentro de la celda",
                 "Código de la Celda",
                 "Código de la celda en el plano",
-                "Área de la celda contaminada (m2)",
+                "Área de la celda impactada (m2)",
                 "TPH mg/kg (Promedio ponderado)",
-                "Proporción de puntos contaminados"
+                "Proporción de puntos impactados"
               )
               # Índices de columnas para fusionar
               cols_fusionar <- c(1, 2, 6, 7)
@@ -2483,19 +2483,19 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
                 "Pozo/Locación",
                 "Código de los puntos que superaron el nivel de intervención dentro de la celda",
                 "Código de la Celda",
-                "Área de la celda contaminada (m2)",
+                "Área de la celda impactada (m2)",
                 "TPH mg/kg (Promedio ponderado)",
-                "Proporción de puntos contaminados"
+                "Proporción de puntos impactados"
               )
               # Índices de columnas para fusionar (sin COD_PLANO)
               cols_fusionar <- c(1, 2, 5, 6)
             }
             
             # Escribir encabezados
-            openxlsx::writeData(wb, "Locaciones_Contaminadas", t(headers), startRow = 1, colNames = FALSE)
+            openxlsx::writeData(wb, "Locaciones_impactadas", t(headers), startRow = 1, colNames = FALSE)
             
             # Escribir datos (empezando en fila 2)
-            openxlsx::writeData(wb, "Locaciones_Contaminadas", datos_locaciones, startRow = 2, colNames = FALSE)
+            openxlsx::writeData(wb, "Locaciones_impactadas", datos_locaciones, startRow = 2, colNames = FALSE)
             
             # ========== FUSIONES DE DATOS ==========
             
@@ -2519,7 +2519,7 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
               for (i in 1:nrow(rangos_locacion)) {
                 # Fusionar columnas según si tiene o no COD_PLANO
                 for (col in cols_fusionar) {
-                  openxlsx::mergeCells(wb, "Locaciones_Contaminadas",
+                  openxlsx::mergeCells(wb, "Locaciones_impactadas",
                                       cols = col,
                                       rows = rangos_locacion$loc_start[i]:rangos_locacion$loc_end[i])
                 }
@@ -2540,7 +2540,7 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
               wrapText = TRUE
             )
             
-            openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_header, rows = 1, cols = 1:7, gridExpand = TRUE)
+            openxlsx::addStyle(wb, "Locaciones_impactadas", style_header, rows = 1, cols = 1:7, gridExpand = TRUE)
             
             # Estilo para columna LOCACION (azul claro)
             style_locacion <- openxlsx::createStyle(
@@ -2602,43 +2602,43 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
             # Aplicar estilos a datos (dinámico según si tiene COD_PLANO)
             num_rows_datos <- nrow(datos_locaciones)
             if (num_rows_datos > 0) {
-              openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_locacion, rows = 2:(2 + num_rows_datos - 1), cols = 1, gridExpand = TRUE)
-              openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_puntos, rows = 2:(2 + num_rows_datos - 1), cols = 2, gridExpand = TRUE)
+              openxlsx::addStyle(wb, "Locaciones_impactadas", style_locacion, rows = 2:(2 + num_rows_datos - 1), cols = 1, gridExpand = TRUE)
+              openxlsx::addStyle(wb, "Locaciones_impactadas", style_puntos, rows = 2:(2 + num_rows_datos - 1), cols = 2, gridExpand = TRUE)
               
               if (tiene_cod_plano) {
                 # Con COD_PLANO: col 3 = celda, col 4 = plano, col 5 = área, col 6 = TPH, col 7 = prop
-                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_celda, rows = 2:(2 + num_rows_datos - 1), cols = 3:4, gridExpand = TRUE)
-                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_area, rows = 2:(2 + num_rows_datos - 1), cols = 5, gridExpand = TRUE)
-                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_tph, rows = 2:(2 + num_rows_datos - 1), cols = 6, gridExpand = TRUE)
-                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_prop, rows = 2:(2 + num_rows_datos - 1), cols = 7, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_impactadas", style_celda, rows = 2:(2 + num_rows_datos - 1), cols = 3:4, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_impactadas", style_area, rows = 2:(2 + num_rows_datos - 1), cols = 5, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_impactadas", style_tph, rows = 2:(2 + num_rows_datos - 1), cols = 6, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_impactadas", style_prop, rows = 2:(2 + num_rows_datos - 1), cols = 7, gridExpand = TRUE)
               } else {
                 # Sin COD_PLANO: col 3 = celda, col 4 = área, col 5 = TPH, col 6 = prop
-                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_celda, rows = 2:(2 + num_rows_datos - 1), cols = 3, gridExpand = TRUE)
-                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_area, rows = 2:(2 + num_rows_datos - 1), cols = 4, gridExpand = TRUE)
-                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_tph, rows = 2:(2 + num_rows_datos - 1), cols = 5, gridExpand = TRUE)
-                openxlsx::addStyle(wb, "Locaciones_Contaminadas", style_prop, rows = 2:(2 + num_rows_datos - 1), cols = 6, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_impactadas", style_celda, rows = 2:(2 + num_rows_datos - 1), cols = 3, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_impactadas", style_area, rows = 2:(2 + num_rows_datos - 1), cols = 4, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_impactadas", style_tph, rows = 2:(2 + num_rows_datos - 1), cols = 5, gridExpand = TRUE)
+                openxlsx::addStyle(wb, "Locaciones_impactadas", style_prop, rows = 2:(2 + num_rows_datos - 1), cols = 6, gridExpand = TRUE)
               }
             }
             
             # ========== AJUSTAR ANCHOS DE COLUMNA (dinámico) ==========
-            openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 1, widths = 15)   # Locación
-            openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 2, widths = 45)   # Puntos
+            openxlsx::setColWidths(wb, "Locaciones_impactadas", cols = 1, widths = 15)   # Locación
+            openxlsx::setColWidths(wb, "Locaciones_impactadas", cols = 2, widths = 45)   # Puntos
             
             if (tiene_cod_plano) {
-              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 3, widths = 18)   # Cód celda
-              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 4, widths = 18)   # Cód plano
-              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 5, widths = 15)   # Área
-              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 6, widths = 15)   # TPH
-              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 7, widths = 18)   # Proporción
+              openxlsx::setColWidths(wb, "Locaciones_impactadas", cols = 3, widths = 18)   # Cód celda
+              openxlsx::setColWidths(wb, "Locaciones_impactadas", cols = 4, widths = 18)   # Cód plano
+              openxlsx::setColWidths(wb, "Locaciones_impactadas", cols = 5, widths = 15)   # Área
+              openxlsx::setColWidths(wb, "Locaciones_impactadas", cols = 6, widths = 15)   # TPH
+              openxlsx::setColWidths(wb, "Locaciones_impactadas", cols = 7, widths = 18)   # Proporción
             } else {
-              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 3, widths = 18)   # Cód celda
-              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 4, widths = 15)   # Área
-              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 5, widths = 15)   # TPH
-              openxlsx::setColWidths(wb, "Locaciones_Contaminadas", cols = 6, widths = 18)   # Proporción
+              openxlsx::setColWidths(wb, "Locaciones_impactadas", cols = 3, widths = 18)   # Cód celda
+              openxlsx::setColWidths(wb, "Locaciones_impactadas", cols = 4, widths = 15)   # Área
+              openxlsx::setColWidths(wb, "Locaciones_impactadas", cols = 5, widths = 15)   # TPH
+              openxlsx::setColWidths(wb, "Locaciones_impactadas", cols = 6, widths = 18)   # Proporción
             }
             
             # Ajustar altura de fila de encabezado
-            openxlsx::setRowHeights(wb, "Locaciones_Contaminadas", rows = 1, heights = 45)
+            openxlsx::setRowHeights(wb, "Locaciones_impactadas", rows = 1, heights = 45)
             
             tiene_datos <- TRUE
           }
@@ -2651,7 +2651,7 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
       n_locaciones <- 0
       if (!is.null(promedios_locaciones_resultado())) {
         n_locaciones <- promedios_locaciones_resultado() %>% 
-          filter(criterio_contaminacion != "No contaminada") %>% 
+          filter(criterio_contaminacion != "No impactada") %>% 
           nrow()
       }
       
@@ -2659,12 +2659,12 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
         Nivel = c("📍 Grillas Individuales", "🔲 Celdas Completas", "🏢 Locaciones Completas", "═ TOTAL POLÍGONOS"),
         Cantidad_Elementos = c(n_grillas, n_celdas, n_locaciones, n_grillas + n_celdas + n_locaciones),
         Descripcion = c(
-          "Vértices de grillas que NO pertenecen a celdas/locaciones contaminadas",
-          "Vértices de celdas que NO pertenecen a locaciones contaminadas",
+          "Vértices de grillas que NO pertenecen a celdas/locaciones impactadas",
+          "Vértices de celdas que NO pertenecen a locaciones impactadas",
           "Locaciones completas (promedios, no tienen vértices)",
           "Total de polígonos discretos para remediación"
         ),
-        Hoja_Excel = c("Vertices_Grillas", "Vertices_Celdas", "Locaciones_Contaminadas", "---"),
+        Hoja_Excel = c("Vertices_Grillas", "Vertices_Celdas", "Locaciones_impactadas", "---"),
         Umbral_TPH = rep(umbral, 4),
         Fecha_Generacion = rep(as.character(Sys.Date()), 4)
       )
@@ -2692,7 +2692,7 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
           "Contenido:",
           "• Hoja 'Vertices_Grillas'",
           "• Hoja 'Vertices_Celdas'",
-          "• Hoja 'Locaciones_Contaminadas'",
+          "• Hoja 'Locaciones_impactadas'",
           "",
           "Lógica jerárquica aplicada:",
           "1. LOCACIÓN > CELDA > GRILLA",
@@ -2708,15 +2708,15 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
         Contenido = c(
           paste("Generado el:", Sys.time()),
           "",
-          "Este archivo contiene las coordenadas (vértices) de los polígonos contaminados",
-          "Coordenadas de grillas individuales (sin celdas/locaciones contaminadas)",
-          "Coordenadas de celdas completas (sin locaciones contaminadas)",
-          "Promedios de locaciones contaminadas (nivel más alto)",
+          "Este archivo contiene las coordenadas (vértices) de los polígonos impactados",
+          "Coordenadas de grillas individuales (sin celdas/locaciones impactadas)",
+          "Coordenadas de celdas completas (sin locaciones impactadas)",
+          "Promedios de locaciones impactadas (nivel más alto)",
           "",
           "",
-          "Si una locación está contaminada, NO se listan sus celdas ni grillas",
-          "Si una celda está contaminada, NO se listan sus grillas individuales",
-          "Solo se listan grillas individuales que NO pertenecen a niveles superiores contaminados",
+          "Si una locación está impactada, NO se listan sus celdas ni grillas",
+          "Si una celda está impactada, NO se listan sus grillas individuales",
+          "Solo se listan grillas individuales que NO pertenecen a niveles superiores impactados",
           "",
           "Para importar en software GIS (ArcGIS, QGIS, etc.)",
           "Para delimitar áreas de remediación",
@@ -2739,7 +2739,7 @@ output$descargar_vertices_jerarquia_btn <- downloadHandler(
             "",
             "Posibles razones:",
             "1. No se han generado vértices aún (presione el botón 'Generar Vértices')",
-            "2. Todos los elementos contaminados se remedian a nivel de LOCACIÓN completa",
+            "2. Todos los elementos impactados se remedian a nivel de LOCACIÓN completa",
             "3. No hay shapefiles de grillas/celdas cargados"
           )
         )

@@ -152,7 +152,7 @@ superan_grilla
 
 # ---
 
-# Aquí deberíamos poder subir el shapefile de grillas para filtrarlo y exportar un shapefile de grillas filtrado (grillas contaminadas)
+# Aquí deberíamos poder subir el shapefile de grillas para filtrarlo y exportar un shapefile de grillas filtrado (grillas impactadas)
 
 # ----
 
@@ -225,7 +225,7 @@ Promedio_celdas <- Promedio_celdas %>%
     IC95_low  = tph - z * se,
     IC95_high = tph + z * se,
     RSE        = (se / tph) * 100,
-    Contaminada = ifelse(tph > 10000, 1, 0)
+    impactada = ifelse(tph > 10000, 1, 0)
   ) %>% 
   mutate(IC95_low = ifelse(IC95_low < 1, 0, IC95_low) |> round(2),
          IC95_high = ifelse(IC95_high < 1, 0, IC95_high) |> round(2),
@@ -271,12 +271,12 @@ Promedio_celdas_final <- Promedio_celdas %>%
     by = "celda"
   )
 
-# 3) Añadir conteo de puntos totales y contaminados por celda
+# 3) Añadir conteo de puntos totales y impactados por celda
 conteo_puntos_celda <- muestra_final_e %>%
   group_by(celda) %>%
   summarise(
     n_puntos_total = n(),
-    n_puntos_contaminados = sum(tph > 10000, na.rm = TRUE),
+    n_puntos_impactados = sum(tph > 10000, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -287,44 +287,44 @@ Promedio_celdas_final <- Promedio_celdas_final %>%
 # 5) Añadir criterio de contaminación por celda
 Promedio_celdas_final <- Promedio_celdas_final %>%
   mutate(
-    contaminada_por_tph = ifelse(tph > 10000, "Sí", "No"),
-    contaminada_por_proporcion = ifelse(prop_exceed > 0.5, "Sí", "No"),
+    impactada_por_tph = ifelse(tph > 10000, "Sí", "No"),
+    impactada_por_proporcion = ifelse(prop_exceed > 0.5, "Sí", "No"),
     criterio_contaminacion = case_when(
-      contaminada_por_tph == "Sí" & contaminada_por_proporcion == "Sí" ~ "Ambos criterios",
-      contaminada_por_tph == "Sí" ~ "Solo TPH promedio",
-      contaminada_por_proporcion == "Sí" ~ "Solo proporción",
-      TRUE ~ "No contaminada"
+      impactada_por_tph == "Sí" & impactada_por_proporcion == "Sí" ~ "Ambos criterios",
+      impactada_por_tph == "Sí" ~ "Solo TPH promedio",
+      impactada_por_proporcion == "Sí" ~ "Solo proporción",
+      TRUE ~ "No impactada"
     )
   )
 
-# Mostrar tabla final de celdas contaminadas
+# Mostrar tabla final de celdas impactadas
 Promedio_celdas_final %>%
-  filter(contaminada_por_tph == "Sí" | contaminada_por_proporcion == "Sí") %>%
+  filter(impactada_por_tph == "Sí" | impactada_por_proporcion == "Sí") %>%
   select(celda, tph, IC95_low, IC95_high, prop_exceed, n_puntos_total, 
-         n_puntos_contaminados, criterio_contaminacion)
+         n_puntos_impactados, criterio_contaminacion)
 
 # ---
 
 # FILTRADO DE SHAPEFILE DE CELDAS:
 # Aquí deberías cargar el shapefile de celdas desde el frontend de la app.
-# Filtrar por las celdas contaminadas según los criterios definidos:
+# Filtrar por las celdas impactadas según los criterios definidos:
 # - Criterio 1: TPH promedio > 10000
-# - Criterio 2: Proporción de puntos contaminados > 50%
+# - Criterio 2: Proporción de puntos impactados > 50%
 # Añadir la columna 'criterio_contaminacion' al shapefile exportado.
 
 # Ejemplo de código para filtrar shapefile (ejecutar en la app):
 # library(sf)
 # shp_celdas <- st_read("ruta/al/shapefile_celdas.shp")
-# celdas_contaminadas <- Promedio_celdas_final %>%
-#   filter(contaminada_por_tph == "Sí" | contaminada_por_proporcion == "Sí") %>%
+# celdas_impactadas <- Promedio_celdas_final %>%
+#   filter(impactada_por_tph == "Sí" | impactada_por_proporcion == "Sí") %>%
 #   pull(celda)
 # shp_celdas_filtrado <- shp_celdas %>%
-#   filter(COD_CELDA %in% celdas_contaminadas) %>%
+#   filter(COD_CELDA %in% celdas_impactadas) %>%
 #   left_join(
 #     Promedio_celdas_final %>% select(celda, criterio_contaminacion),
 #     by = c("COD_CELDA" = "celda")
 #   )
-# st_write(shp_celdas_filtrado, "celdas_contaminadas.shp")
+# st_write(shp_celdas_filtrado, "celdas_impactadas.shp")
 
 # ----
 
@@ -340,7 +340,7 @@ superan_celdas_proporcion <- Promedio_celdas_final %>%
   pull(celda)
 superan_celdas_proporcion 
 
-# mostrar la tabla Promedio_celdas_final filtrada para indicar las celdas contaminadas y su valor de tph > 10000 o de sobrepasar proporción de puntos que exceden los 10000 sobre el 50%
+# mostrar la tabla Promedio_celdas_final filtrada para indicar las celdas impactadas y su valor de tph > 10000 o de sobrepasar proporción de puntos que exceden los 10000 sobre el 50%
 
 ```
 
@@ -377,7 +377,7 @@ Promedio_locaciones <- Promedio_locaciones %>%
     IC95_low  = tph - z * se,
     IC95_high = tph + z * se,
     RSE        = (se / tph) * 100,
-    Contaminada = ifelse(tph > 10000, 1, 0)
+    impactada = ifelse(tph > 10000, 1, 0)
   ) %>% 
   mutate(IC95_low = ifelse(IC95_low < 1, 0, IC95_low) |> round(2),
          IC95_high = ifelse(IC95_high < 1, 0, IC95_high) |> round(2),
@@ -413,12 +413,12 @@ Promedio_prop_loc <- svyby(
   ) %>% 
   select(locacion, prop_exceed, se_prop, IC95_low_prop, IC95_high_prop)
 
-# 2) Añadir conteo de puntos totales y contaminados por locación
+# 2) Añadir conteo de puntos totales y impactados por locación
 conteo_puntos_loc <- muestra_final_e %>%
   group_by(locacion) %>%
   summarise(
     n_puntos_total = n(),
-    n_puntos_contaminados = sum(tph > 10000, na.rm = TRUE),
+    n_puntos_impactados = sum(tph > 10000, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -434,13 +434,13 @@ Promedio_locaciones_final <- Promedio_locaciones %>%
 # 4) Añadir criterio de contaminación por locación
 Promedio_locaciones_final <- Promedio_locaciones_final %>%
   mutate(
-    contaminada_por_tph = ifelse(tph > 10000, "Sí", "No"),
-    contaminada_por_proporcion = ifelse(prop_exceed > 0.5, "Sí", "No"),
+    impactada_por_tph = ifelse(tph > 10000, "Sí", "No"),
+    impactada_por_proporcion = ifelse(prop_exceed > 0.5, "Sí", "No"),
     criterio_contaminacion = case_when(
-      contaminada_por_tph == "Sí" & contaminada_por_proporcion == "Sí" ~ "Ambos criterios",
-      contaminada_por_tph == "Sí" ~ "Solo TPH promedio",
-      contaminada_por_proporcion == "Sí" ~ "Solo proporción",
-      TRUE ~ "No contaminada"
+      impactada_por_tph == "Sí" & impactada_por_proporcion == "Sí" ~ "Ambos criterios",
+      impactada_por_tph == "Sí" ~ "Solo TPH promedio",
+      impactada_por_proporcion == "Sí" ~ "Solo proporción",
+      TRUE ~ "No impactada"
     )
   )
 
@@ -460,11 +460,11 @@ superan_loc_proporcion <- Promedio_locaciones_final %>%
   pull(locacion)
 superan_loc_proporcion
 
-# Mostrar la tabla Promedio_locaciones filtrada para indicar las locaciones contaminadas
+# Mostrar la tabla Promedio_locaciones filtrada para indicar las locaciones impactadas
 Promedio_locaciones_final %>%
-  filter(contaminada_por_tph == "Sí" | contaminada_por_proporcion == "Sí") %>%
+  filter(impactada_por_tph == "Sí" | impactada_por_proporcion == "Sí") %>%
   select(locacion, tph, IC95_low, IC95_high, prop_exceed, n_puntos_total, 
-         n_puntos_contaminados, criterio_contaminacion)
+         n_puntos_impactados, criterio_contaminacion)
 
 ```
 
@@ -802,13 +802,13 @@ build_vertices_celdas <- function(celdas_vec, outfile) {
 # Salidas requeridas
 # =========================
 
-# 1) Celdas contaminadas por PROMEDIO TPH
+# 1) Celdas impactadas por PROMEDIO TPH
 vertices_celdas_tph_prom_enriq <- build_vertices_celdas(
   superan_celdas_tph_prom,
   "vert_celdas_prom_enriquecido.xlsx"
 )
 
-# 2) Celdas contaminadas por PROPORCIÓN (>50% puntos contaminados)
+# 2) Celdas impactadas por PROPORCIÓN (>50% puntos impactados)
 vertices_celdas_prop_enriq <- build_vertices_celdas(
   superan_celdas_proporcion,
   "vert_celdas_prop_enriquecido.xlsx"

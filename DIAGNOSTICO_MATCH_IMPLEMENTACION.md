@@ -61,7 +61,7 @@ Se implementó un **sistema completo de diagnóstico** para identificar y report
    ❌ PUNTOS PERDIDOS: NN
    
    ⚠️  Estos puntos NO aparecerán en 'Todas las Grillas'
-   ⚠️  ni en 'Grillas Contaminadas'
+   ⚠️  ni en 'Grillas impactadas'
    ```
 
 ### 5. **Nueva Pestaña UI: 🔍 Diagnóstico de Match**
@@ -274,7 +274,7 @@ El sistema permite descargar:
 
 **Recuerda:** Los puntos perdidos **NO aparecen** en:
 - ❌ Tabla "Todas las Grillas"
-- ❌ Tabla "Grillas Contaminadas"
+- ❌ Tabla "Grillas impactadas"
 - ❌ Análisis por Celdas
 - ❌ Análisis por Locaciones
 

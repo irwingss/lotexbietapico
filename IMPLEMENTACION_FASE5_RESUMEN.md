@@ -8,7 +8,7 @@ Se ha implementado exitosamente el **flujo completo de análisis de resultados d
 - ✅ Funciones auxiliares para análisis estadístico con diseño complejo
 - ✅ Nueva pestaña "5. Análisis de Resultados" con 6 sub-pestañas
 - ✅ Lógica del servidor completa con análisis multinivel (grilla, celda, locación)
-- ✅ Generación de vértices de polígonos contaminados
+- ✅ Generación de vértices de polígonos impactados
 - ✅ Exportación de reportes en Excel
 - ✅ Integración con sistema de errores existente
 
@@ -23,7 +23,7 @@ Se ha implementado exitosamente el **flujo completo de análisis de resultados d
 **Cambios realizados:**
 
 #### Análisis Nivel Celdas (líneas 274-329)
-- Añadido conteo de puntos totales y contaminados por celda
+- Añadido conteo de puntos totales y impactados por celda
 - Implementado cálculo de proporción de puntos que superan umbral
 - Añadida columna `criterio_contaminacion` con clasificación:
   - "Ambos criterios"
@@ -32,10 +32,10 @@ Se ha implementado exitosamente el **flujo completo de análisis de resultados d
 - Incluido código ejemplo para filtrado de shapefile de celdas
 
 #### Análisis Nivel Locaciones (líneas 388-467)
-- Completado cálculo de proporción de puntos contaminados por locación
-- Añadido conteo de puntos totales y contaminados
+- Completado cálculo de proporción de puntos impactados por locación
+- Añadido conteo de puntos totales y impactados
 - Implementado criterio de contaminación dual (TPH + proporción)
-- Generación de códigos de locaciones contaminadas por ambos criterios
+- Generación de códigos de locaciones impactadas por ambos criterios
 
 **Resultado:** Documento RMarkdown 100% funcional con todos los análisis estadísticos completos.
 
@@ -68,7 +68,7 @@ calcular_promedios_celdas(muestra_final_e, umbral = 10000)
 ```
 - Crea objeto survey con diseño bietápico
 - Calcula promedios de TPH por celda con IC 95%
-- Calcula proporción de puntos contaminados
+- Calcula proporción de puntos impactados
 - Genera criterio de contaminación dual
 - Retorna tabla con todas las métricas
 
@@ -90,17 +90,17 @@ get_vertices(sf_obj, code_col, codes)
 ```r
 generar_vertices_grillas(shp_marco_grillas, muestra_final_e, superan_grilla)
 ```
-- Genera vértices de grillas contaminadas
+- Genera vértices de grillas impactadas
 - Enriquece con datos de TPH, locación, área
 - Incluye código de punto asociado
 
 ```r
 generar_vertices_celdas(shp_marco_celdas, Promedio_celdas_final, muestra_final_e, celdas_vec)
 ```
-- Genera vértices de celdas contaminadas
+- Genera vértices de celdas impactadas
 - Incluye TPH promedio por celda
 - Lista puntos que superan umbral
-- Calcula porcentaje de puntos contaminados
+- Calcula porcentaje de puntos impactados
 
 **Total de funciones:** 7 funciones robustas y productivas
 
@@ -133,19 +133,19 @@ generar_vertices_celdas(shp_marco_celdas, Promedio_celdas_final, muestra_final_e
     │   ├── Resumen de carga
     │   └── Tabla muestra enriquecida
     ├── Análisis Nivel Grilla
-    │   ├── Resumen puntos contaminados
+    │   ├── Resumen puntos impactados
     │   ├── Estadísticas TPH
-    │   ├── Tabla grillas contaminadas
+    │   ├── Tabla grillas impactadas
     │   └── Botón descargar Excel
     ├── Análisis Nivel Celdas
     │   ├── Resumen análisis
     │   ├── Tabla completa promedios
-    │   ├── Tabla celdas contaminadas
+    │   ├── Tabla celdas impactadas
     │   └── Botones descarga (TPH y Proporción)
     ├── Análisis Nivel Locaciones
     │   ├── Resumen análisis
     │   ├── Tabla completa promedios
-    │   ├── Tabla locaciones contaminadas
+    │   ├── Tabla locaciones impactadas
     │   └── Botones descarga (TPH y Proporción)
     ├── Vértices de Polígonos
     │   ├── Estado de generación
@@ -154,7 +154,7 @@ generar_vertices_celdas(shp_marco_celdas, Promedio_celdas_final, muestra_final_e
     │   └── Botones descarga múltiples
     └── Resumen Final
         ├── Reporte ejecutivo
-        ├── Códigos elementos contaminados
+        ├── Códigos elementos impactados
         └── Botón descargar reporte completo
 ```
 
@@ -178,9 +178,9 @@ vertices_celdas_prop_resultado <- reactiveVal(NULL)
 **Outputs renderizados:**
 - `resumen_carga_resultados`: Resumen de datos cargados
 - `tabla_muestra_enriquecida`: Tabla con muestra unificada
-- `resumen_grillas_contaminadas`: Estadísticas de puntos
+- `resumen_grillas_impactadas`: Estadísticas de puntos
 - `estadisticas_grillas`: Métricas TPH
-- `tabla_grillas_contaminadas`: Tabla interactiva
+- `tabla_grillas_impactadas`: Tabla interactiva
 
 ---
 
@@ -197,13 +197,13 @@ vertices_celdas_prop_resultado <- reactiveVal(NULL)
 - Resumen Final (4 outputs)
 
 **Handlers de descarga (13 en total):**
-1. `descargar_grillas_contaminadas_btn`
+1. `descargar_grillas_impactadas_btn`
 2. `descargar_promedios_celdas_btn`
-3. `descargar_celdas_contaminadas_tph_btn`
-4. `descargar_celdas_contaminadas_prop_btn`
+3. `descargar_celdas_impactadas_tph_btn`
+4. `descargar_celdas_impactadas_prop_btn`
 5. `descargar_promedios_locaciones_btn`
-6. `descargar_locaciones_contaminadas_tph_btn`
-7. `descargar_locaciones_contaminadas_prop_btn`
+6. `descargar_locaciones_impactadas_tph_btn`
+7. `descargar_locaciones_impactadas_prop_btn`
 8. `descargar_vertices_grillas_btn`
 9. `descargar_vertices_celdas_tph_btn`
 10. `descargar_vertices_celdas_prop_btn`
@@ -244,16 +244,16 @@ vertices_celdas_prop_resultado <- reactiveVal(NULL)
 - TPH promedio con IC 95%
 - Error estándar
 - RSE (Error estándar relativo)
-- Proporción de puntos contaminados
+- Proporción de puntos impactados
 - IC 95% de la proporción
-- Conteo de puntos totales y contaminados
+- Conteo de puntos totales y impactados
 - Criterio de contaminación clasificado
 
 #### **PASO 3: Generar Vértices (Opcional)**
 1. Usuario carga shapefile de grillas (.zip)
 2. Usuario carga shapefile de celdas (.zip)
 3. Click en "Generar Vértices"
-4. Sistema extrae vértices de polígonos contaminados:
+4. Sistema extrae vértices de polígonos impactados:
    - Grillas con TPH > umbral
    - Celdas con TPH promedio > umbral
    - Celdas con proporción > 50%
@@ -267,11 +267,11 @@ vertices_celdas_prop_resultado <- reactiveVal(NULL)
 
 #### **PASO 4: Exportar Resultados**
 Usuario puede descargar:
-- Grillas contaminadas individuales
+- Grillas impactadas individuales
 - Promedios completos por celdas
-- Celdas contaminadas (por TPH o proporción)
+- Celdas impactadas (por TPH o proporción)
 - Promedios completos por locaciones
-- Locaciones contaminadas (por TPH o proporción)
+- Locaciones impactadas (por TPH o proporción)
 - Vértices de grillas y celdas
 - **Reporte completo multi-hoja** (Excel con todas las tablas)
 
@@ -294,7 +294,7 @@ survey_design_obj <- svydesign(
 
 **Estimadores calculados:**
 - `svyby(~tph, ~celda, svymean)`: Promedio de TPH por celda
-- `svyby(~I(tph > umbral), ~celda, svymean)`: Proporción de puntos contaminados
+- `svyby(~I(tph > umbral), ~celda, svymean)`: Proporción de puntos impactados
 
 #### Nivel Locaciones
 ```r
@@ -323,13 +323,13 @@ Cada celda/locación se clasifica según:
 | **Criterio** | **Descripción** | **Clasificación** |
 |---|---|---|
 | **TPH Promedio** | Promedio de TPH > umbral | "Sí" / "No" |
-| **Proporción** | >50% de puntos contaminados | "Sí" / "No" |
+| **Proporción** | >50% de puntos impactados | "Sí" / "No" |
 
 **Clasificación Final (`criterio_contaminacion`):**
 - ✅ "Ambos criterios": TPH promedio Y proporción cumplen
 - ⚠️ "Solo TPH promedio": Solo cumple TPH promedio
 - ⚠️ "Solo proporción": Solo cumple proporción
-- ✓ "No contaminada": No cumple ninguno
+- ✓ "No impactada": No cumple ninguno
 
 **Visualización en tablas:**
 - Código de colores en UI:
@@ -351,7 +351,7 @@ Al descargar "Reporte Completo", se genera un workbook con:
 1. **Muestra_Enriquecida**: Datos unificados RAR + Muestra
 2. **Promedios_Celdas**: Análisis completo por celdas
 3. **Promedios_Locaciones**: Análisis completo por locaciones
-4. **Grillas_Contaminadas**: Puntos que superan umbral
+4. **Grillas_impactadas**: Puntos que superan umbral
 
 **Código de generación:**
 ```r
@@ -413,7 +413,7 @@ tryCatch({
 - [ ] Ejecutar con umbral personalizado
 - [ ] Verificar cálculo de IC 95%
 - [ ] Verificar clasificación de criterio_contaminacion
-- [ ] Confirmar conteo de puntos totales vs contaminados
+- [ ] Confirmar conteo de puntos totales vs impactados
 
 #### Generación de Vértices
 - [ ] Cargar shapefile de grillas válido

@@ -24,7 +24,12 @@ tryCatch({
   r_scripts <- list.files(path = scripts_path, pattern = "\\.R$", full.names = TRUE, ignore.case = TRUE)
   # Excluir scripts que son para análisis interactivo y no para la app
   # También excluir server-fase5-handlers.R que debe cargarse dentro del servidor
-  scripts_a_excluir <- c("Revisión de listado de locaciones.R", "server-fase5-handlers.R")
+  # Excluir snippets o handlers que no deben cargarse en el arranque
+  scripts_a_excluir <- c(
+    "Revisión de listado de locaciones.R",
+    "server-fase5-handlers.R",
+    "btw.r"
+  )
   r_scripts <- r_scripts[!grepl(paste(scripts_a_excluir, collapse="|"), r_scripts)]
   for (script in r_scripts) {
     print(paste("Cargando script:", script))
@@ -170,7 +175,7 @@ ui <- navbarPage(
   ),
   
   # Pestaña 2 - Carga y verificación de marcos
-  tabPanel("2. Carga de Marcos",
+  tabPanel("2. Carga de Marcos y Verificaciones",
            fluidRow(
              column(width = 3, # Columna lateral (30%)
                     wellPanel(class = "fade-in",
@@ -203,70 +208,11 @@ ui <- navbarPage(
                         tags$hr(),
                         
                         actionButton("cargar_marcos_btn", "Cargar marcos", 
-                                    class = "btn-primary btn-block")
-                      ),
-                      tags$hr(),
-                      h3("2B. Verificación de Marcos", class = "fade-in"),
-                      div(class = "card",
+                                    class = "btn-primary btn-block"),
                         actionButton("verificar_marcos_btn", "Verificar integridad", 
                                     class = "btn-success btn-block")
-                      ),
-                      tags$hr(),
-                      h3("2C. Adicional: Revisión de Marcos Shapefile", class = "fade-in"),
-                      div(class = "card",
-                        p(style = "font-size: 13px; color: #555;", 
-                          tags$b("Propósito:"), " Validar coherencia espacial entre grillas y celdas usando shapefiles."),
-                        p(style = "font-size: 13px; color: #555;", 
-                          "Esta herramienta identifica:",
-                          tags$ul(
-                            tags$li(tags$b("Grillas fuera de celdas:"), " Grillas cuyos centroides caen fuera de cualquier celda"),
-                            tags$li(tags$b("Asignación incorrecta:"), " Grillas con código de celda que no corresponde")
-                          )
-                        ),
-                        tags$hr(),
-                        
-                        div(style = "background-color: #fff9e6; border-left: 4px solid #ff9800; padding: 10px; margin-bottom: 10px; border-radius: 4px;",
-                          tags$div(style = "font-weight: bold; font-size: 13px; color: #ff9800; margin-bottom: 5px;",
-                            icon("th"), " Shapefile de marco de GRILLAS")
-                        ),
-                        fileInput("archivo_shp_grillas_verif", 
-                                 "Seleccionar archivo ZIP:", 
-                                 accept = ".zip",
-                                 placeholder = "Ninguno"),
-                        uiOutput("mapeo_columnas_shp_grillas_verif_ui"),
-                        tags$hr(),
-                        
-                        div(style = "background-color: #e7f3ff; border-left: 4px solid #0066cc; padding: 10px; margin-bottom: 10px; border-radius: 4px;",
-                          tags$div(style = "font-weight: bold; font-size: 13px; color: #0066cc; margin-bottom: 5px;",
-                            icon("table"), " Shapefile de marco de CELDAS")
-                        ),
-                        fileInput("archivo_shp_celdas_verif", 
-                                 "Seleccionar archivo ZIP:", 
-                                 accept = ".zip",
-                                 placeholder = "Ninguno"),
-                        uiOutput("mapeo_columnas_shp_celdas_verif_ui"),
-                        tags$hr(),
-                        
-                        div(style = "background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin-bottom: 10px; border-radius: 4px;",
-                          tags$div(style = "font-weight: bold; font-size: 13px; color: #856404; margin-bottom: 5px;",
-                            icon("flask"), " OPCIONAL: Excel de Vértices de Áreas Contaminadas (generado como exportable de la Fase 5. 'Análisis de Resultados')")
-                        ),
-                        fileInput("archivo_contaminadas_excel", 
-                                 "Cargar Reporte_SOLO_CONTAMINADAS.xlsx:", 
-                                 accept = c(".xlsx", ".xls"),
-                                 placeholder = "Ninguno"),
-                        div(id = "info_contaminadas",
-                          p(style = "font-size: 11px; color: #666; margin-top: -10px;",
-                            "Si carga este archivo, el sistema resaltará específicamente las grillas/celdas ",
-                            tags$b("contaminadas"), " que tengan problemas espaciales."
-                          )
-                        ),
-                        tags$hr(),
-                        
-                        actionButton("verificar_espacial_btn", 
-                                    "🔍 Ejecutar Verificación Espacial", 
-                                    class = "btn-warning btn-block")
                       )
+                      
                     )
              ),
              column(width = 9, # Área principal (70%)
@@ -336,7 +282,79 @@ ui <- navbarPage(
                                           uiOutput("sugerencia_celdas_no_en_marco"),
                                           uiOutput("resumen_verificacion_cruzada")
                                         ))
-                               )),
+                               ))
+                    )
+             )
+           )
+  ),
+  
+  # Pestaña 3 - Validaciones espaciales de marcos
+  tabPanel("3. Validaciones espaciales",
+           fluidRow(
+             column(width = 3,
+                    wellPanel(class = "fade-in",
+                      h3("3A. Revisión de Marcos en Shapefile", class = "fade-in"),
+                      div(class = "card",
+                        p(style = "font-size: 13px; color: #555;", 
+                          tags$b("Propósito:"), " Validar coherencia espacial entre grillas y celdas usando shapefiles."),
+                        p(style = "font-size: 13px; color: #555;", 
+                          "Esta herramienta identifica:",
+                          tags$ul(
+                            tags$li(tags$b("Grillas fuera de celdas:"), " Grillas cuyos centroides caen fuera de cualquier celda"),
+                            tags$li(tags$b("Asignación incorrecta:"), " Grillas con código de celda que no corresponde")
+                          )
+                        ),
+                        tags$hr(),
+                        
+                        div(style = "background-color: #e7f3ff; border-left: 4px solid #0066cc; padding: 10px; margin-bottom: 10px; border-radius: 4px;",
+                          tags$div(style = "font-weight: bold; font-size: 13px; color: #0066cc; margin-bottom: 5px;",
+                            icon("table"), " Shapefile de marco de CELDAS")
+                        ),
+                        fileInput("archivo_shp_celdas_verif", 
+                                 "Seleccionar archivo ZIP:", 
+                                 accept = ".zip",
+                                 placeholder = "Ninguno"),
+                        uiOutput("mapeo_columnas_shp_celdas_verif_ui"),
+                        tags$hr(),
+
+                        div(style = "background-color: #fff9e6; border-left: 4px solid #ff9800; padding: 10px; margin-bottom: 10px; border-radius: 4px;",
+                          tags$div(style = "font-weight: bold; font-size: 13px; color: #ff9800; margin-bottom: 5px;",
+                            icon("th"), " Shapefile de marco de GRILLAS")
+                        ),
+                        fileInput("archivo_shp_grillas_verif", 
+                                 "Seleccionar archivo ZIP:", 
+                                 accept = ".zip",
+                                 placeholder = "Ninguno"),
+                        uiOutput("mapeo_columnas_shp_grillas_verif_ui"),
+                        tags$hr(),
+                        
+                        actionButton("verificar_espacial_btn", 
+                                    "🔍 Ejecutar Verificación Espacial", 
+                                    class = "btn-warning btn-block"),
+                        tags$hr(),
+                        
+                        # OPCIONAL: Cargar Excel de impactadas de Fase 5
+                        div(style = "background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin-bottom: 10px; border-radius: 4px;",
+                          tags$div(style = "font-weight: bold; font-size: 13px; color: #856404; margin-bottom: 5px;",
+                            icon("flask"), " OPCIONAL: Excel de Grillas/Celdas Impactadas"),
+                          p(style = "font-size: 11px; color: #666; margin: 5px 0;",
+                            "Generado en la Fase 5 'Análisis de Resultados'")
+                        ),
+                        fileInput("archivo_impactadas_excel", 
+                                 "Cargar Reporte_SOLO_impactadaS.xlsx:", 
+                                 accept = c(".xlsx", ".xls"),
+                                 placeholder = "Ninguno"),
+                        div(id = "info_impactadas",
+                          p(style = "font-size: 11px; color: #666; margin-top: -10px;",
+                            "Si carga este archivo, podrá ver pestañas adicionales que muestran ",
+                            tags$b("solo las grillas/celdas impactadas"), " con problemas espaciales.")
+                        ),
+                        uiOutput("info_carga_impactadas")
+                      )
+                    )
+             ),
+             column(width = 9,
+                    tabsetPanel(id = "tabset_validaciones_espaciales",
                       tabPanel("Verif. de Profundidades", 
                                h3("Revisión de Profundidades", class = "fade-in"),
                                div(class = "alert alert-info", style = "background-color: #e7f3ff; border-left: 4px solid #0066cc;",
@@ -420,33 +438,55 @@ ui <- navbarPage(
                                             tags$b("PROBLEMA:"), " Tipo de inconsistencia detectada")
                                         ))
                                )),
-                      tabPanel("🔍 Chequeo Vértices Áreas Contaminadas", 
-                               h3("Análisis de Grillas/Celdas Contaminadas de Fase 5. Análisis de Resultados", class = "fade-in"),
-                               div(class = "alert alert-info",
-                                 h4("ℹ️ Sobre este análisis"),
-                                 p("Esta pestaña muestra específicamente los problemas espaciales detectados en las ",
-                                   tags$b("Áreas Contaminadas"), " según el Excel de Fase 5."),
-                                 p(tags$b("Requisito:"), " Debe cargar el archivo ", 
-                                   tags$code("Reporte_SOLO_CONTAMINADAS.xlsx"), 
-                                   " en la sección izquierda."),
-                                 uiOutput("info_carga_contaminadas")
+                      # ========== PESTAÑAS ADICIONALES PARA GRILLAS IMPACTADAS (FASE 5) ==========
+                      tabPanel("🔥 Impactadas: Fuera de Celdas", 
+                               h3("Grillas Impactadas Fuera de Celdas", class = "fade-in"),
+                               div(class = "alert alert-warning",
+                                 h4("🔥 Enfoque en Grillas Impactadas"),
+                                 p("Esta pestaña muestra ", tags$b("únicamente las grillas impactadas"), 
+                                   " (de la Fase 5) que tienen sus centroides fuera de celdas."),
+                                 p(style = "font-size: 12px; color: #666;",
+                                   icon("info-circle"), " Para ver ", tags$b("todas"), 
+                                   " las grillas con este problema, revise la pestaña '🚨 Grillas Fuera de Celdas'."),
+                                 hr(),
+                                 h5("📊 Resumen de Verificación"),
+                                 uiOutput("resumen_grillas_impactadas_fuera")
                                ),
-                               
-                               # Resumen ejecutivo de grillas contaminadas con problemas
                                fluidRow(
-                                 column(width = 6,
+                                 column(width = 12,
                                         div(class = "card fade-in",
-                                          h4("🚨 Grillas Contaminadas FUERA de Celdas"),
-                                          uiOutput("resumen_grillas_contaminadas_fuera"),
-                                          hr(),
-                                          DTOutput("tabla_grillas_contaminadas_fuera")
-                                        )),
-                                 column(width = 6,
+                                          h4("Listado de Grillas Impactadas Problemáticas"),
+                                          DTOutput("tabla_grillas_impactadas_fuera"),
+                                          p(style = "margin-top: 10px; font-size: 12px; color: #666;",
+                                            "Estas grillas requieren ", tags$b("atención prioritaria"), 
+                                            " porque están impactadas y tienen problemas geométricos.")
+                                        ))
+                               )),
+                      tabPanel("🔥 Impactadas: Código Incorrecto", 
+                               h3("Grillas Impactadas con Código de Celda Incorrecto", class = "fade-in"),
+                               div(class = "alert alert-danger",
+                                 h4("🔥 Enfoque en Grillas Impactadas"),
+                                 p("Esta pestaña muestra ", tags$b("únicamente las grillas impactadas"), 
+                                   " (de la Fase 5) que tienen códigos de celda incorrectos."),
+                                 p(style = "font-size: 12px; color: #666;",
+                                   icon("info-circle"), " Para ver ", tags$b("todas"), 
+                                   " las grillas con este problema, revise la pestaña '🚨 Códigos de Celda Incorrectos'."),
+                                 hr(),
+                                 h5("📊 Resumen de Verificación"),
+                                 uiOutput("resumen_grillas_impactadas_codigo")
+                               ),
+                               fluidRow(
+                                 column(width = 12,
                                         div(class = "card fade-in",
-                                          h4("⚠️ Grillas Contaminadas con Código INCORRECTO"),
-                                          uiOutput("resumen_grillas_contaminadas_codigo"),
-                                          hr(),
-                                          DTOutput("tabla_grillas_contaminadas_codigo")
+                                          h4("Grillas Impactadas con Código Incorrecto"),
+                                          DTOutput("tabla_grillas_impactadas_codigo"),
+                                          p(style = "margin-top: 10px; font-size: 12px; color: #666;",
+                                            tags$b("CELDA_ASIGNADA:"), " Código que tiene actualmente en el shapefile", br(),
+                                            tags$b("CELDA_REAL:"), " Código de la celda donde realmente cae el centroide", br(),
+                                            tags$b("PROBLEMA:"), " Tipo de inconsistencia detectada", br(),
+                                            br(),
+                                            "Estas grillas requieren ", tags$b("corrección prioritaria"), 
+                                            " porque están impactadas y mal asignadas.")
                                         ))
                                ))
                     )
@@ -454,12 +494,12 @@ ui <- navbarPage(
            )
   ),
   
-  # Pestaña 3 - Cálculo del tamaño muestral
-  tabPanel("3. Cálculo del n muestral",
+  # Pestaña 4 - Cálculo del tamaño muestral
+  tabPanel("4. Cálculo del n muestral",
            fluidRow(
              column(width = 3, # Columna lateral (30%)
                     wellPanel(class = "fade-in",
-                      h3("3A. Parámetros de Muestreo", class = "fade-in"),
+                      h3("4A. Parámetros de Muestreo", class = "fade-in"),
                       div(class = "card",
                         numericInput("nivel_confianza", "Nivel de confianza (%)", 95, min = 80, max = 99.9, step = 0.1),
                         numericInput("tasa_no_respuesta", "Tasa de no respuesta (%)", 5.75, min = 0, max = 50, step = 0.01),
@@ -495,12 +535,12 @@ ui <- navbarPage(
            )
   ),
   
-  # Pestaña 4 - Muestreo Bietápico
-  tabPanel("4. Muestreo Bietápico",
+  # Pestaña 5 - Muestreo Bietápico
+  tabPanel("5. Muestreo Bietápico",
            fluidRow(
              column(width = 3, # Columna lateral (30%)
                     wellPanel(class = "fade-in",
-                      h3("4A. Ejecutar Muestreo", class = "fade-in"),
+                      h3("5A. Ejecutar Muestreo", class = "fade-in"),
                       div(class = "card",
                         p("Selecciona las celdas y rejillas finales usando los marcos y el tamaño de muestra definidos."),
                         numericInput("seed_muestreo", "Semilla para reproducibilidad:", value = 123, min = 1),
@@ -508,14 +548,14 @@ ui <- navbarPage(
                                      class = "btn-success btn-block")
                       ),
                       tags$hr(),
-                      h3("4B. Generar Códigos", class = "fade-in"),
+                      h3("5B. Generar Códigos", class = "fade-in"),
                       div(class = "card",
                         p("Añade los códigos de campo y colectora a la muestra, optimizando el orden de supervisión."),
                         actionButton("generar_codigos_btn", "2. Generar Códigos de Campo", 
                                      class = "btn-primary btn-block")
                       ),
                       tags$hr(),
-                      h3("4C. Generar distancias a Pozos", class = "fade-in"),
+                      h3("5C. Generar distancias a Pozos", class = "fade-in"),
                       div(class = "card",
                         p("Carga un archivo Excel con pozos de referencia para calcular distancias y añadir altitudes."),
                         p(strong("Columnas requeridas:")),
@@ -532,7 +572,7 @@ ui <- navbarPage(
                                      class = "btn-warning btn-block")
                       ),
                       tags$hr(),
-                      h3("4D. Exportar Resultados", class = "fade-in"),
+                      h3("5D. Exportar Resultados", class = "fade-in"),
                       div(class = "card",
                         p("Descarga la muestra final con códigos en el formato que prefieras."),
                         downloadButton("descargar_shp_btn", "Descargar Shapefile (.zip)", class = "btn-success btn-block"),
@@ -636,12 +676,12 @@ ui <- navbarPage(
            )
   ),
   
-  # Pestaña 5 - Análisis de Resultados de Laboratorio
-  tabPanel("5. Análisis de Resultados",
+  # Pestaña 6 - Análisis de Resultados de Laboratorio
+  tabPanel("6. Análisis de Resultados",
            fluidRow(
              column(width = 3, # Columna lateral (30%)
                     wellPanel(class = "fade-in",
-                      h3("5A. Cargar Datos", class = "fade-in"),
+                      h3("6A. Cargar Datos", class = "fade-in"),
                       div(class = "card",
                         h4("Seleccione el caso de carga:"),
                         radioButtons("caso_carga", NULL,
@@ -730,7 +770,7 @@ ui <- navbarPage(
                                     class = "btn-primary btn-block")
                       ),
                       tags$hr(),
-                      h3("5B. Análisis Estadístico", class = "fade-in"),
+                      h3("6B. Análisis Estadístico", class = "fade-in"),
                       div(class = "card",
                         numericInput("umbral_tph", "Umbral de contaminación TPH (mg/kg)", 
                                     value = 10000, min = 0, step = 100),
@@ -738,16 +778,16 @@ ui <- navbarPage(
                                     class = "btn-success btn-block")
                       ),
                       tags$hr(),
-                      h3("5C. Cargar Shapefiles", class = "fade-in"),
+                      h3("6C. Cargar Shapefiles", class = "fade-in"),
                       div(class = "card",
-                        p("Para generar vértices de polígonos contaminados"),
-                        fileInput("shp_grillas_upload", "Shapefile de Grillas (.zip)",
-                                  accept = c(".zip")),
-                        uiOutput("mapeo_columnas_grillas_ui"),
-                        tags$hr(),
+                        p("Para generar vértices de polígonos impactados"),
                         fileInput("shp_celdas_upload", "Shapefile de Celdas (.zip)",
                                   accept = c(".zip")),
                         uiOutput("mapeo_columnas_celdas_ui"),
+                        tags$hr(),
+                        fileInput("shp_grillas_upload", "Shapefile de Grillas (.zip)",
+                                  accept = c(".zip")),
+                        uiOutput("mapeo_columnas_grillas_ui"),
                         tags$hr(),
                         actionButton("generar_vertices_btn", "Generar Vértices", 
                                     class = "btn-warning btn-block")
@@ -825,20 +865,20 @@ ui <- navbarPage(
                                )
                       ),
                       tabPanel("Análisis Nivel Grilla", 
-                               h3("Puntos de Muestreo Contaminados", class = "fade-in"),
+                               h3("Puntos de Muestreo impactados", class = "fade-in"),
                                div(class = "card fade-in",
                                  h4("Resumen de Análisis"),
-                                 verbatimTextOutput("resumen_grillas_contaminadas")
+                                 verbatimTextOutput("resumen_grillas_impactadas")
                                ),
                                tags$br(),
                                tabsetPanel(id = "tabset_grillas",
-                                 tabPanel("Grillas Contaminadas",
+                                 tabPanel("Grillas impactadas",
                                           tags$br(),
                                           div(class = "card fade-in",
-                                            DTOutput("tabla_grillas_contaminadas"),
+                                            DTOutput("tabla_grillas_impactadas"),
                                             tags$br(),
-                                            downloadButton("descargar_grillas_contaminadas_btn", 
-                                                          "Descargar Grillas Contaminadas (.xlsx)", 
+                                            downloadButton("descargar_grillas_impactadas_btn", 
+                                                          "Descargar Grillas impactadas (.xlsx)", 
                                                           class = "btn-success btn-sm")
                                           )
                                  ),
@@ -913,13 +953,13 @@ ui <- navbarPage(
                                ),
                                tags$br(),
                                tabsetPanel(id = "tabset_celdas",
-                                 tabPanel("Celdas Contaminadas",
+                                 tabPanel("Celdas impactadas",
                                           tags$br(),
                                           div(class = "card fade-in",
-                                            DTOutput("tabla_celdas_contaminadas"),
+                                            DTOutput("tabla_celdas_impactadas"),
                                             tags$br(),
-                                            downloadButton("descargar_celdas_contaminadas_btn", 
-                                                          "Descargar Celdas Contaminadas (.xlsx)", 
+                                            downloadButton("descargar_celdas_impactadas_btn", 
+                                                          "Descargar Celdas impactadas (.xlsx)", 
                                                           class = "btn-success btn-sm")
                                           )
                                  ),
@@ -943,13 +983,13 @@ ui <- navbarPage(
                                ),
                                tags$br(),
                                tabsetPanel(id = "tabset_locaciones",
-                                 tabPanel("Locaciones Contaminadas",
+                                 tabPanel("Locaciones impactadas",
                                           tags$br(),
                                           div(class = "card fade-in",
-                                            DTOutput("tabla_locaciones_contaminadas"),
+                                            DTOutput("tabla_locaciones_impactadas"),
                                             tags$br(),
-                                            downloadButton("descargar_locaciones_contaminadas_btn", 
-                                                          "Descargar Locaciones Contaminadas (.xlsx)", 
+                                            downloadButton("descargar_locaciones_impactadas_btn", 
+                                                          "Descargar Locaciones impactadas (.xlsx)", 
                                                           class = "btn-success btn-sm")
                                           )
                                  ),
@@ -966,7 +1006,7 @@ ui <- navbarPage(
                                )
                       ),
                       tabPanel("Vértices de Polígonos", 
-                               h3("Vértices de Grillas y Celdas Contaminadas", class = "fade-in"),
+                               h3("Vértices de Grillas y Celdas impactadas", class = "fade-in"),
                                div(class = "card fade-in",
                                  h4("Estado de Generación de Vértices"),
                                  verbatimTextOutput("estado_vertices")
@@ -978,11 +1018,11 @@ ui <- navbarPage(
                                  # Sub-pestaña 1: Análisis por separado
                                  tabPanel("📊 Análisis por separado",
                                           tags$br(),
-                                          p("Esta vista muestra todos los vértices de grillas y celdas contaminadas sin aplicar exclusiones jerárquicas."),
+                                          p("Esta vista muestra todos los vértices de grillas y celdas impactadas sin aplicar exclusiones jerárquicas."),
                                           fluidRow(
                                             column(width = 6,
                                                    div(class = "card fade-in",
-                                                     h4("Vértices de Grillas Contaminadas"),
+                                                     h4("Vértices de Grillas impactadas"),
                                                      DTOutput("tabla_vertices_grillas"),
                                                      tags$br(),
                                                      downloadButton("descargar_vertices_grillas_btn", 
@@ -991,7 +1031,7 @@ ui <- navbarPage(
                                                    )),
                                             column(width = 6,
                                                    div(class = "card fade-in",
-                                                     h4("Vértices de Celdas Contaminadas"),
+                                                     h4("Vértices de Celdas impactadas"),
                                                      DTOutput("tabla_vertices_celdas"),
                                                      tags$br(),
                                                      fluidRow(
@@ -1014,9 +1054,9 @@ ui <- navbarPage(
                                           div(class = "alert alert-info",
                                             h5("ℹ️ Lógica de Exclusión Jerárquica", style = "margin-top: 0;"),
                                             tags$ul(
-                                              tags$li(HTML("<strong>Nivel 1 - Locaciones completas:</strong> Si una locación está contaminada, NO se muestran sus celdas ni grillas individuales.")),
-                                              tags$li(HTML("<strong>Nivel 2 - Celdas completas:</strong> Si una celda está contaminada (y su locación NO lo está), NO se muestran sus grillas individuales.")),
-                                              tags$li(HTML("<strong>Nivel 3 - Grillas individuales:</strong> Solo se muestran grillas que NO pertenecen a celdas ni locaciones contaminadas completas."))
+                                              tags$li(HTML("<strong>Nivel 1 - Locaciones completas:</strong> Si una locación está impactada, NO se muestran sus celdas ni grillas individuales.")),
+                                              tags$li(HTML("<strong>Nivel 2 - Celdas completas:</strong> Si una celda está impactada (y su locación NO lo está), NO se muestran sus grillas individuales.")),
+                                              tags$li(HTML("<strong>Nivel 3 - Grillas individuales:</strong> Solo se muestran grillas que NO pertenecen a celdas ni locaciones impactadas completas."))
                                             ),
                                             p(HTML("<strong>Resultado:</strong> Evita duplicación al remediar. No tiene sentido acusar grillas individuales de una celda que ya se va a remediar completa."))
                                           ),
@@ -1029,18 +1069,18 @@ ui <- navbarPage(
                                             fluidRow(
                                               column(width = 4,
                                                      div(class = "well well-sm",
-                                                       h6("📍 Grillas Contaminadas", style = "color: #d9534f; font-weight: bold;"),
+                                                       h6("📍 Grillas impactadas", style = "color: #d9534f; font-weight: bold;"),
                                                        uiOutput("lista_grillas_unificado")
                                                      )),
                                               column(width = 4,
                                                      div(class = "well well-sm",
-                                                       h6("🔲 Celdas Contaminadas", style = "color: #f0ad4e; font-weight: bold;"),
+                                                       h6("🔲 Celdas impactadas", style = "color: #f0ad4e; font-weight: bold;"),
                                                        uiOutput("lista_celdas_unificado")
                                                      )),
                                               column(width = 4,
                                                      div(class = "well well-sm",
-                                                       h6("🏢 Locaciones Contaminadas", style = "color: #5bc0de; font-weight: bold;"),
-                                                       uiOutput("lista_locaciones_contaminadas")
+                                                       h6("🏢 Locaciones impactadas", style = "color: #5bc0de; font-weight: bold;"),
+                                                       uiOutput("lista_locaciones_impactadas")
                                                      ))
                                             )
                                           ),
@@ -1049,8 +1089,8 @@ ui <- navbarPage(
                                           fluidRow(
                                             column(width = 6,
                                                    div(class = "card fade-in",
-                                                     h4("Vértices de Grillas Contaminadas (Filtradas)"),
-                                                     p("Solo grillas que NO pertenecen a celdas o locaciones contaminadas", 
+                                                     h4("Vértices de Grillas impactadas (Filtradas)"),
+                                                     p("Solo grillas que NO pertenecen a celdas o locaciones impactadas", 
                                                        style = "font-size: 0.9em; color: #666;"),
                                                      DTOutput("tabla_vertices_grillas_unificado"),
                                                      tags$br(),
@@ -1060,8 +1100,8 @@ ui <- navbarPage(
                                                    )),
                                             column(width = 6,
                                                    div(class = "card fade-in",
-                                                     h4("Vértices de Celdas Contaminadas (Filtradas)"),
-                                                     p("Solo celdas que NO pertenecen a locaciones contaminadas", 
+                                                     h4("Vértices de Celdas impactadas (Filtradas)"),
+                                                     p("Solo celdas que NO pertenecen a locaciones impactadas", 
                                                        style = "font-size: 0.9em; color: #666;"),
                                                      DTOutput("tabla_vertices_celdas_unificado"),
                                                      tags$br(),
@@ -1073,254 +1113,324 @@ ui <- navbarPage(
                                  )
                                )
                       ),
-                      tabPanel("Resumen final y shapefiles", 
-                               h3("Resumen Final de Resultados y Exportaciones", class = "fade-in"),
-                              
-                              fluidRow(
-                                # ========== COLUMNA IZQUIERDA: RESÚMENES EJECUTIVOS ==========
-                                column(width = 8,
-                                       div(class = "card fade-in",
-                                           tabsetPanel(
-                                             id = "tabset_resumen_final",
-                                             
-                                             # ===== PESTAÑA 1: CON JERARQUÍA (PRIMERO) =====
-                                             tabPanel("🎯 Con Análisis Jerárquico",
-                                                      tags$br(),
-                                                      div(class = "alert alert-success",
-                                                          h5("ℹ️ Análisis con Exclusión Jerárquica", 
-                                                             style = "margin-top: 0; font-weight: bold;"),
-                                                          p(HTML("Prima <strong>Locación sobre Celdas</strong>, y <strong>Celdas sobre Grillas</strong> para la conclusión final."), 
-                                                            style = "margin-bottom: 5px;"),
-                                                          p("Evita duplicación: no acusa grillas de celdas completas ni celdas de locaciones completas contaminadas.",
-                                                            style = "font-size: 0.9em; color: #555; margin-bottom: 0;")
-                                                      ),
-                                                      
-                                                      # Resumen Ejecutivo con Jerarquía
-                                                      h5("📊 Resumen Ejecutivo", style = "font-weight: bold; margin-top: 15px;"),
-                                                      uiOutput("resumen_unificado_conteos"),
-                                                      
-                                                      tags$br(),
-                                                      
-                                                      # Códigos de Elementos con Jerarquía
-                                                      h5("📋 Códigos de Elementos Contaminados", style = "font-weight: bold;"),
-                                                      fluidRow(
-                                                        column(width = 4,
-                                                               div(class = "well well-sm",
-                                                                   h6("📍 Grillas", style = "color: #d9534f; font-weight: bold; margin-top: 0;"),
-                                                                   uiOutput("lista_grillas_unificado")
-                                                               )),
-                                                        column(width = 4,
-                                                               div(class = "well well-sm",
-                                                                   h6("🔲 Celdas", style = "color: #f0ad4e; font-weight: bold; margin-top: 0;"),
-                                                                   uiOutput("lista_celdas_unificado")
-                                                               )),
-                                                        column(width = 4,
-                                                               div(class = "well well-sm",
-                                                                   h6("🏢 Locaciones", style = "color: #5bc0de; font-weight: bold; margin-top: 0;"),
-                                                                   uiOutput("lista_locaciones_contaminadas")
-                                                               ))
-                                                      )
-                                             ),
-                                             
-                                             # ===== PESTAÑA 2: SIN JERARQUÍA =====
-                                             tabPanel("📊 Sin Análisis Jerárquico",
-                                                      tags$br(),
-                                                      div(class = "alert alert-info",
-                                                          h5("ℹ️ Análisis Sin Exclusión", 
-                                                             style = "margin-top: 0; font-weight: bold;"),
-                                                          p("Muestra todos los elementos contaminados sin aplicar filtros jerárquicos.",
-                                                            style = "margin-bottom: 5px;"),
-                                                          p("Puede incluir grillas de celdas completas y celdas de locaciones completas.",
-                                                            style = "font-size: 0.9em; color: #555; margin-bottom: 0;")
-                                                      ),
-                                                      
-                                                      # Resumen Ejecutivo sin Jerarquía
-                                                      h5("📊 Resumen Ejecutivo", style = "font-weight: bold; margin-top: 15px;"),
-                                                      uiOutput("resumen_sin_jerarquia_conteos"),
-                                                      
-                                                      tags$br(),
-                                                      
-                                                      # Códigos de Elementos sin Jerarquía
-                                                      h5("📋 Códigos de Elementos Contaminados", style = "font-weight: bold;"),
-                                                      fluidRow(
-                                                        column(width = 4,
-                                                               div(class = "well well-sm",
-                                                                   h6("📍 Grillas", style = "color: #d9534f; font-weight: bold; margin-top: 0;"),
-                                                                   uiOutput("lista_grillas_sin_jerarquia")
-                                                               )),
-                                                        column(width = 4,
-                                                               div(class = "well well-sm",
-                                                                   h6("🔲 Celdas", style = "color: #f0ad4e; font-weight: bold; margin-top: 0;"),
-                                                                   uiOutput("lista_celdas_sin_jerarquia")
-                                                               )),
-                                                        column(width = 4,
-                                                               div(class = "well well-sm",
-                                                                   h6("🏢 Locaciones", style = "color: #5bc0de; font-weight: bold; margin-top: 0;"),
-                                                                   uiOutput("lista_locaciones_sin_jerarquia")
-                                                               ))
-                                                      )
-                                             )
-                                           )
-                                       )
-                                ),
-                                
-                                # ========== COLUMNA DERECHA: BOTONES DE DESCARGA ==========
-                                column(width = 4,
-                                       div(class = "card fade-in",
-                                           h4("📥 Exportaciones", style = "margin-top: 0;"),
-                                           
-                                           # Botón 1: Reporte Completo
-                                           div(style = "margin-bottom: 15px;",
-                                               h6("Reporte Completo", style = "font-weight: bold; margin-bottom: 5px;"),
-                                               p("Todas las grillas, celdas y locaciones", 
-                                                 style = "font-size: 0.85em; color: #666; margin-bottom: 8px;"),
-                                               downloadButton("descargar_reporte_completo_btn", 
-                                                             "Descargar (.xlsx)", 
-                                                             class = "btn-success btn-sm btn-block")
-                                           ),
-                                           
-                                           tags$hr(),
-                                           
-                                           # Botón 2: Solo Contaminadas (sin jerarquía)
-                                           div(style = "margin-bottom: 15px;",
-                                               h6("Solo Contaminadas", style = "font-weight: bold; margin-bottom: 5px;"),
-                                               p("Elementos contaminados sin filtro jerárquico", 
-                                                 style = "font-size: 0.85em; color: #666; margin-bottom: 8px;"),
-                                               downloadButton("descargar_reporte_solo_contaminadas_btn", 
-                                                             "Descargar (.xlsx)", 
-                                                             class = "btn-warning btn-sm btn-block")
-                                           ),
-                                           
-                                           tags$hr(),
-                                           
-                                           # Botón 3: Contaminadas con Jerarquía
-                                          div(style = "margin-bottom: 15px;",
-                                              h6("Contaminadas con Jerarquía", 
-                                                 style = "font-weight: bold; margin-bottom: 5px;"),
-                                              p("Locaciones > Celdas > Grillas (sin duplicación)", 
-                                                style = "font-size: 0.85em; color: #666; margin-bottom: 8px;"),
-                                              downloadButton("descargar_reporte_jerarquia_btn", 
-                                                            "Descargar (.xlsx)", 
-                                                            class = "btn-danger btn-sm btn-block")
-                                          ),
-                                          
-                                          tags$hr(),
-                                          
-                                          # Botón 4: Vértices con Jerarquía (NUEVO)
-                                          div(style = "margin-bottom: 15px;",
-                                              h6("Vértices con Jerarquía", 
-                                                 style = "font-weight: bold; margin-bottom: 5px;"),
-                                              p("Coordenadas de polígonos por hoja (Grillas, Celdas, Locaciones)", 
-                                                style = "font-size: 0.85em; color: #666; margin-bottom: 8px;"),
-                                              downloadButton("descargar_vertices_jerarquia_btn", 
-                                                            "Descargar (.xlsx)", 
-                                                            class = "btn-success btn-sm btn-block")
-                                          ),
-                                          
-                                          tags$hr(),
-                                          
-                                          # Botón 5: Shapefiles
-                                           div(style = "margin-bottom: 0;",
-                                               h6("Shapefiles (con Jerarquía)", 
-                                                  style = "font-weight: bold; margin-bottom: 5px;"),
-                                               p("ZIP con 2 shapefiles separados (grillas y celdas)", 
-                                                 style = "font-size: 0.85em; color: #666; margin-bottom: 8px;"),
-                                               downloadButton("descargar_shapefiles_contaminados_btn", 
-                                                             "Descargar (.zip)", 
-                                                             class = "btn-info btn-sm btn-block")
-                                           )
-                                       )
-                                )
-                              )
-                     ),
-                     
-                     # ========== NUEVA PESTAÑA: TEXTO PARA LAS CONCLUSIONES ==========
-                     tabPanel("📝 Texto para las conclusiones",
-                              h3("Texto para Conclusiones de Informe Técnico", class = "fade-in"),
-                              
-                              div(class = "alert alert-info",
-                                h4("ℹ️ Información sobre esta sección"),
-                                p("Esta sección genera automáticamente el texto de conclusiones técnicas basado en los resultados del análisis de la Fase 5."),
-                                p(tags$b("Requisito:"), " Debe completar el análisis de resultados de laboratorio primero (pestaña ", tags$code("5. Análisis de Resultados"), ")."),
-                                p(tags$b("Nota:"), " Complete los campos de información complementaria para personalizar el texto generado.")
-                              ),
-                              
-                              fluidRow(
-                                # Columna izquierda: Inputs de información complementaria
-                                column(width = 4,
-                                       div(class = "card fade-in",
-                                           h4("📋 Información Complementaria", style = "margin-top: 0;"),
-                                           p("Complete los siguientes campos para personalizar el texto:", 
-                                             style = "font-size: 0.9em; color: #666;"),
-                                           
-                                           textInput("nombre_lote_conclusiones", 
-                                                    "Nombre del Lote:",
-                                                    value = "Lote X",
-                                                    placeholder = "Ej: Lote 192"),
-                                           
-                                           textInput("nombre_empresa_conclusiones", 
-                                                    "Nombre de la Empresa:",
-                                                    value = "CNPC",
-                                                    placeholder = "Ej: CNPC Perú"),
-                                           
-                                           numericInput("area_grilla_conclusiones", 
-                                                       "Área de cada grilla (m²):",
-                                                       value = 5,
-                                                       min = 1,
-                                                       step = 0.01),
-                                           
-                                           numericInput("lado_grilla_conclusiones", 
-                                                       "Lado de la grilla (m):",
-                                                       value = 2.236,
-                                                       min = 0.1,
-                                                       step = 0.001),
-                                           
-                                           tags$hr(),
-                                           tags$div(style = "background-color: #f0f8ff; padding: 10px; border-radius: 4px; border-left: 4px solid #2196f3;",
-                                             tags$h5("📐 Columnas de Área en Shapefiles", style = "margin-top: 0; color: #2196f3;"),
-                                             tags$p("Seleccione las columnas que contienen el área (m²):", style = "font-size: 0.85em; margin-bottom: 10px;"),
-                                             uiOutput("selector_col_area_grillas"),
-                                             uiOutput("selector_col_area_celdas")
-                                           ),
-                                           
-                                           tags$hr(),
-                                           
-                                           actionButton("generar_texto_conclusiones_btn",
-                                                       "🔄 Generar Texto de Conclusiones",
-                                                       class = "btn-primary btn-block",
-                                                       style = "font-weight: bold;"),
-                                           
-                                           conditionalPanel(
-                                             condition = "output.texto_conclusiones_disponible",
-                                             tags$br(),
-                                             actionButton("copiar_texto_conclusiones_btn",
-                                                         "📋 Copiar al Portapapeles",
-                                                         class = "btn-info btn-block",
-                                                         style = "font-weight: bold;"),
-                                             tags$br(),
-                                             downloadButton("descargar_texto_conclusiones_btn",
-                                                           "📥 Descargar Texto (.txt)",
-                                                           class = "btn-success btn-block")
-                                           )
-                                       )
-                                ),
-                                
-                                # Columna derecha: Texto generado
-                                column(width = 8,
-                                       div(class = "card fade-in",
-                                           h4("📄 Texto Generado", style = "margin-top: 0;"),
-                                           uiOutput("info_texto_conclusiones_disponible"),
-                                           tags$hr(),
-                                           div(style = "max-height: 700px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; background-color: #f9f9f9; border-radius: 4px;",
-                                               uiOutput("texto_conclusiones_display")
-                                           )
-                                       )
-                                )
-                              )
                      )
+                   )
+       )
+  ),
+  
+  # Pestaña 7 - Resultados para Informe
+  tabPanel(
+    "7. Resultados para Informe",
+    fluidRow(
+      column(
+        width = 12,
+        tabsetPanel(
+          id = "tabset_resultados_informe",
+          tabPanel(
+            "Resumen final y shapefiles",
+            h3("Resumen Final de Resultados y Exportaciones", class = "fade-in"),
+            fluidRow(
+              # ========== COLUMNA IZQUIERDA: RESÚMENES EJECUTIVOS ==========
+              column(
+                width = 8,
+                div(
+                  class = "card fade-in",
+                  tabsetPanel(
+                    id = "tabset_resumen_final",
+                    # ===== PESTAÑA 1: CON JERARQUÍA (PRIMERO) =====
+                    tabPanel(
+                      "🎯 Con Análisis Jerárquico",
+                      tags$br(),
+                      div(
+                        class = "alert alert-success",
+                        h5(
+                          "ℹ️ Análisis con Exclusión Jerárquica",
+                          style = "margin-top: 0; font-weight: bold;"
+                        ),
+                        p(
+                          HTML("Prima <strong>Locación sobre Celdas</strong>, y <strong>Celdas sobre Grillas</strong> para la conclusión final."),
+                          style = "margin-bottom: 5px;"
+                        ),
+                        p(
+                          "Evita duplicación: no acusa grillas de celdas completas ni celdas de locaciones completas impactadas.",
+                          style = "font-size: 0.9em; color: #555; margin-bottom: 0;"
+                        )
+                      ),
+                      # Resumen Ejecutivo con Jerarquía
+                      h5("📊 Resumen Ejecutivo", style = "font-weight: bold; margin-top: 15px;"),
+                      uiOutput("resumen_unificado_conteos"),
+                      tags$br(),
+                      # Códigos de Elementos con Jerarquía
+                      h5("📋 Códigos de Elementos impactados", style = "font-weight: bold;"),
+                      fluidRow(
+                        column(
+                          width = 4,
+                          div(
+                            class = "well well-sm",
+                            h6("📍 Grillas", style = "color: #d9534f; font-weight: bold; margin-top: 0;"),
+                            uiOutput("lista_grillas_unificado")
+                          )
+                        ),
+                        column(
+                          width = 4,
+                          div(
+                            class = "well well-sm",
+                            h6("🔲 Celdas", style = "color: #f0ad4e; font-weight: bold; margin-top: 0;"),
+                            uiOutput("lista_celdas_unificado")
+                          )
+                        ),
+                        column(
+                          width = 4,
+                          div(
+                            class = "well well-sm",
+                            h6("🏢 Locaciones", style = "color: #5bc0de; font-weight: bold; margin-top: 0;"),
+                            uiOutput("lista_locaciones_impactadas")
+                          )
+                        )
+                      )
+                    ),
+                    # ===== PESTAÑA 2: SIN JERARQUÍA =====
+                    tabPanel(
+                      "📊 Sin Análisis Jerárquico",
+                      tags$br(),
+                      div(
+                        class = "alert alert-info",
+                        h5(
+                          "ℹ️ Análisis Sin Exclusión",
+                          style = "margin-top: 0; font-weight: bold;"
+                        ),
+                        p(
+                          "Muestra todos los elementos impactados sin aplicar filtros jerárquicos.",
+                          style = "margin-bottom: 5px;"
+                        ),
+                        p(
+                          "Puede incluir grillas de celdas completas y celdas de locaciones completas.",
+                          style = "font-size: 0.9em; color: #555; margin-bottom: 0;"
+                        )
+                      ),
+                      # Resumen Ejecutivo sin Jerarquía
+                      h5("📊 Resumen Ejecutivo", style = "font-weight: bold; margin-top: 15px;"),
+                      uiOutput("resumen_sin_jerarquia_conteos"),
+                      tags$br(),
+                      # Códigos de Elementos sin Jerarquía
+                      h5("📋 Códigos de Elementos impactados", style = "font-weight: bold;"),
+                      fluidRow(
+                        column(
+                          width = 4,
+                          div(
+                            class = "well well-sm",
+                            h6("📍 Grillas", style = "color: #d9534f; font-weight: bold; margin-top: 0;"),
+                            uiOutput("lista_grillas_sin_jerarquia")
+                          )
+                        ),
+                        column(
+                          width = 4,
+                          div(
+                            class = "well well-sm",
+                            h6("🔲 Celdas", style = "color: #f0ad4e; font-weight: bold; margin-top: 0;"),
+                            uiOutput("lista_celdas_sin_jerarquia")
+                          )
+                        ),
+                        column(
+                          width = 4,
+                          div(
+                            class = "well well-sm",
+                            h6("🏢 Locaciones", style = "color: #5bc0de; font-weight: bold; margin-top: 0;"),
+                            uiOutput("lista_locaciones_sin_jerarquia")
+                          )
+                        )
+                      )
                     )
-             )
-           )
+                  )
+                )
+              ),
+              # ========== COLUMNA DERECHA: BOTONES DE DESCARGA ==========
+              column(
+                width = 4,
+                div(
+                  class = "card fade-in",
+                  h4("📥 Exportaciones", style = "margin-top: 0;"),
+                  # Botón 1: Reporte Completo
+                  div(
+                    style = "margin-bottom: 15px;",
+                    h6("Reporte Completo", style = "font-weight: bold; margin-bottom: 5px;"),
+                    p(
+                      "Todas las grillas, celdas y locaciones",
+                      style = "font-size: 0.85em; color: #666; margin-bottom: 8px;"
+                    ),
+                    downloadButton(
+                      "descargar_reporte_completo_btn",
+                      "Descargar (.xlsx)",
+                      class = "btn-success btn-sm btn-block"
+                    )
+                  ),
+                  tags$hr(),
+                  # Botón 2: Solo impactadas (sin jerarquía)
+                  div(
+                    style = "margin-bottom: 15px;",
+                    h6("Solo impactadas", style = "font-weight: bold; margin-bottom: 5px;"),
+                    p(
+                      "Elementos impactados sin filtro jerárquico",
+                      style = "font-size: 0.85em; color: #666; margin-bottom: 8px;"
+                    ),
+                    downloadButton(
+                      "descargar_reporte_solo_impactadas_btn",
+                      "Descargar (.xlsx)",
+                      class = "btn-warning btn-sm btn-block"
+                    )
+                  ),
+                  tags$hr(),
+                  # Botón 3: impactadas con Jerarquía
+                  div(
+                    style = "margin-bottom: 15px;",
+                    h6(
+                      "impactadas con Jerarquía",
+                      style = "font-weight: bold; margin-bottom: 5px;"
+                    ),
+                    p(
+                      "Locaciones > Celdas > Grillas (sin duplicación)",
+                      style = "font-size: 0.85em; color: #666; margin-bottom: 8px;"
+                    ),
+                    downloadButton(
+                      "descargar_reporte_jerarquia_btn",
+                      "Descargar (.xlsx)",
+                      class = "btn-danger btn-sm btn-block"
+                    )
+                  ),
+                  tags$hr(),
+                  # Botón 4: Vértices con Jerarquía (NUEVO)
+                  div(
+                    style = "margin-bottom: 15px;",
+                    h6("Vértices con Jerarquía", style = "font-weight: bold; margin-bottom: 5px;"),
+                    p(
+                      "Coordenadas de polígonos por hoja (Grillas, Celdas, Locaciones)",
+                      style = "font-size: 0.85em; color: #666; margin-bottom: 8px;"
+                    ),
+                    downloadButton(
+                      "descargar_vertices_jerarquia_btn",
+                      "Descargar (.xlsx)",
+                      class = "btn-success btn-sm btn-block"
+                    )
+                  ),
+                  tags$hr(),
+                  # Botón 5: Shapefiles
+                  div(
+                    style = "margin-bottom: 0;",
+                    h6("Shapefiles (con Jerarquía)", style = "font-weight: bold; margin-bottom: 5px;"),
+                    p(
+                      "ZIP con 2 shapefiles separados (grillas y celdas)",
+                      style = "font-size: 0.85em; color: #666; margin-bottom: 8px;"
+                    ),
+                    downloadButton(
+                      "descargar_shapefiles_impactados_btn",
+                      "Descargar (.zip)",
+                      class = "btn-info btn-sm btn-block"
+                    )
+                  )
+                )
+              )
+            )
+          ),
+          # ========== PESTAÑA: TEXTO PARA LAS CONCLUSIONES ==========
+          tabPanel(
+            "📝 Texto para las conclusiones",
+            h3("Texto para Conclusiones de Informe Técnico", class = "fade-in"),
+            div(
+              class = "alert alert-info",
+              h4("ℹ️ Información sobre esta sección"),
+              p("Esta sección genera automáticamente el texto de conclusiones técnicas basado en los resultados del análisis de la Fase 6."),
+              p(tags$b("Requisito:"), " Debe completar el análisis de resultados de laboratorio primero (pestaña ", tags$code("6. Análisis de Resultados"), ")."),
+              p(tags$b("Nota:"), " Complete los campos de información complementaria para personalizar el texto generado.")
+            ),
+            fluidRow(
+              # Columna izquierda: Inputs de información complementaria
+              column(
+                width = 4,
+                div(
+                  class = "card fade-in",
+                  h4("📋 Información Complementaria", style = "margin-top: 0;"),
+                  p(
+                    "Complete los siguientes campos para personalizar el texto:",
+                    style = "font-size: 0.9em; color: #666;"
+                  ),
+                  textInput(
+                    "nombre_lote_conclusiones",
+                    "Nombre del Lote:",
+                    value = "Lote X",
+                    placeholder = "Ej: Lote 192"
+                  ),
+                  textInput(
+                    "nombre_empresa_conclusiones",
+                    "Nombre de la Empresa:",
+                    value = "CNPC",
+                    placeholder = "Ej: CNPC Perú"
+                  ),
+                  numericInput(
+                    "area_grilla_conclusiones",
+                    "Área de cada grilla (m²):",
+                    value = 5,
+                    min = 1,
+                    step = 0.01
+                  ),
+                  numericInput(
+                    "lado_grilla_conclusiones",
+                    "Lado de la grilla (m):",
+                    value = 2.236,
+                    min = 0.1,
+                    step = 0.001
+                  ),
+                  tags$hr(),
+                  tags$div(
+                    style = "background-color: #f0f8ff; padding: 10px; border-radius: 4px; border-left: 4px solid #2196f3;",
+                    tags$h5("📐 Columnas de Área en Shapefiles", style = "margin-top: 0; color: #2196f3;"),
+                    tags$p("Seleccione las columnas que contienen el área (m²):", style = "font-size: 0.85em; margin-bottom: 10px;"),
+                    uiOutput("selector_col_area_grillas"),
+                    uiOutput("selector_col_area_celdas")
+                  ),
+                  tags$hr(),
+                  actionButton(
+                    "generar_texto_conclusiones_btn",
+                    "🔄 Generar Texto de Conclusiones",
+                    class = "btn-primary btn-block",
+                    style = "font-weight: bold;"
+                  ),
+                  conditionalPanel(
+                    condition = "output.texto_conclusiones_disponible",
+                    tags$br(),
+                    actionButton(
+                      "copiar_texto_conclusiones_btn",
+                      "📋 Copiar al Portapapeles",
+                      class = "btn-info btn-block",
+                      style = "font-weight: bold;"
+                    ),
+                    tags$br(),
+                    downloadButton(
+                      "descargar_texto_conclusiones_btn",
+                      "📥 Descargar Texto (.txt)",
+                      class = "btn-success btn-block"
+                    )
+                  )
+                )
+              ),
+              # Columna derecha: Texto generado
+              column(
+                width = 8,
+                div(
+                  class = "card fade-in",
+                  h4("📄 Texto Generado", style = "margin-top: 0;"),
+                  uiOutput("info_texto_conclusiones_disponible"),
+                  tags$hr(),
+                  div(
+                    style = "max-height: 700px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; background-color: #f9f9f9; border-radius: 4px;",
+                    uiOutput("texto_conclusiones_display")
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
   ),
   
   # Pestaña de Errores - Para mostrar errores de la aplicación
@@ -1392,10 +1502,10 @@ server <- function(input, output, session) {
   centroides_grillas_verif <- reactiveVal(NULL)
   resultado_grillas_fuera <- reactiveVal(NULL)
   resultado_celdas_mal_asignadas <- reactiveVal(NULL)
-  # Variables reactivas - Fase 2C (Excel de Contaminadas de Fase 5)
-  grillas_contaminadas_f5 <- reactiveVal(NULL)
-  celdas_contaminadas_f5 <- reactiveVal(NULL)
-  locaciones_contaminadas_f5 <- reactiveVal(NULL)
+  # Variables reactivas - Fase 2C (Excel de impactadas de Fase 5)
+  grillas_impactadas_f5 <- reactiveVal(NULL)
+  celdas_impactadas_f5 <- reactiveVal(NULL)
+  locaciones_impactadas_f5 <- reactiveVal(NULL)
   
   # Variables reactivas - Fase 4 (Pozos de referencia)
   pozos_referencia <- reactiveVal(NULL)
@@ -1525,15 +1635,15 @@ server <- function(input, output, session) {
     })
   })
   
-  # Observer para cargar Excel de contaminadas de Fase 5
-  observeEvent(input$archivo_contaminadas_excel, {
-    req(input$archivo_contaminadas_excel)
+  # Observer para cargar Excel de impactadas de Fase 5
+  observeEvent(input$archivo_impactadas_excel, {
+    req(input$archivo_impactadas_excel)
     
     tryCatch({
       # Leer las tres hojas del Excel
-      grillas_cont <- openxlsx::read.xlsx(input$archivo_contaminadas_excel$datapath, sheet = "Grillas_Contaminadas")
-      celdas_cont <- openxlsx::read.xlsx(input$archivo_contaminadas_excel$datapath, sheet = "Celdas_Contaminadas")
-      locaciones_cont <- openxlsx::read.xlsx(input$archivo_contaminadas_excel$datapath, sheet = "Locaciones_Contaminadas")
+      grillas_cont <- openxlsx::read.xlsx(input$archivo_impactadas_excel$datapath, sheet = "Grillas_impactadas")
+      celdas_cont <- openxlsx::read.xlsx(input$archivo_impactadas_excel$datapath, sheet = "Celdas_impactadas")
+      locaciones_cont <- openxlsx::read.xlsx(input$archivo_impactadas_excel$datapath, sheet = "Locaciones_impactadas")
       
       # Estandarizar columnas
       grillas_cont <- estandarizar_columnas(grillas_cont)
@@ -1541,9 +1651,9 @@ server <- function(input, output, session) {
       locaciones_cont <- estandarizar_columnas(locaciones_cont)
       
       # Guardar en reactivos
-      grillas_contaminadas_f5(grillas_cont)
-      celdas_contaminadas_f5(celdas_cont)
-      locaciones_contaminadas_f5(locaciones_cont)
+      grillas_impactadas_f5(grillas_cont)
+      celdas_impactadas_f5(celdas_cont)
+      locaciones_impactadas_f5(locaciones_cont)
       
       # Notificación de éxito
       n_grillas <- nrow(grillas_cont)
@@ -1551,31 +1661,31 @@ server <- function(input, output, session) {
       n_locaciones <- nrow(locaciones_cont)
       
       showNotification(
-        paste0("✅ Excel de contaminadas cargado exitosamente:\n",
-               "📍 ", n_grillas, " grillas contaminadas\n",
-               "🔲 ", n_celdas, " celdas contaminadas\n",
-               "🏢 ", n_locaciones, " locaciones contaminadas"),
+        paste0("✅ Excel de impactadas cargado exitosamente:\n",
+               "📍 ", n_grillas, " grillas impactadas\n",
+               "🔲 ", n_celdas, " celdas impactadas\n",
+               "🏢 ", n_locaciones, " locaciones impactadas"),
         type = "message",
         duration = 6
       )
       
-      cat("\n✅ Excel de contaminadas de Fase 5 cargado:\n")
+      cat("\n✅ Excel de impactadas de Fase 5 cargado:\n")
       cat("  - Grillas:", n_grillas, "\n")
       cat("  - Celdas:", n_celdas, "\n")
       cat("  - Locaciones:", n_locaciones, "\n")
       
     }, error = function(e) {
-      grillas_contaminadas_f5(NULL)
-      celdas_contaminadas_f5(NULL)
-      locaciones_contaminadas_f5(NULL)
+      grillas_impactadas_f5(NULL)
+      celdas_impactadas_f5(NULL)
+      locaciones_impactadas_f5(NULL)
       
       showNotification(
-        paste("❌ Error al cargar Excel de contaminadas:", e$message),
+        paste("❌ Error al cargar Excel de impactadas:", e$message),
         type = "error",
         duration = 8
       )
       
-      registrar_error(e$message, "Carga Excel contaminadas Fase 5")
+      registrar_error(e$message, "Carga Excel impactadas Fase 5")
     })
   })
   
@@ -1626,7 +1736,6 @@ server <- function(input, output, session) {
   # Función para simular la eliminación de una locación
   observeEvent(input$simular_btn, {
     req(marco_celdas_original(), input$locacion_simular)
-{{ ... }}
     
     # Verificar que la locación exista
     locacion_a_eliminar <- input$locacion_simular
@@ -2598,7 +2707,8 @@ server <- function(input, output, session) {
         celdas_prof_invalida(data.frame())
       }
       
-      # Mostrar notificación de éxito
+      # Enfocar la pestaña de Verificación de Locaciones y notificar
+      updateTabsetPanel(session, "tabset_fase2", selected = "Verif. de Locaciones")
       showNotification("Verificación completada", type = "message")
       
     }, error = function(e) {
@@ -3244,7 +3354,7 @@ server <- function(input, output, session) {
     })
   })
   
-  # Outputs de visualización - Grillas fuera de celdas (ORIGINAL - sin análisis de contaminadas)
+  # Outputs de visualización - Grillas fuera de celdas (ORIGINAL - sin análisis de impactadas)
   output$resumen_grillas_fuera <- renderUI({
     resultado <- resultado_grillas_fuera()
     req(resultado)
@@ -3408,38 +3518,38 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================ #
-  # OUTPUTS PARA PESTAÑA "CHEQUEO VÉRTICES (CONTAMINADAS F5)"
+  # OUTPUTS PARA PESTAÑA "CHEQUEO VÉRTICES (impactadaS F5)"
   # ============================================================================ #
   
-  # Info de carga de Excel de contaminadas
-  output$info_carga_contaminadas <- renderUI({
-    if (is.null(grillas_contaminadas_f5())) {
+  # Info de carga de Excel de impactadas
+  output$info_carga_impactadas <- renderUI({
+    if (is.null(grillas_impactadas_f5())) {
       tags$div(style = "background-color: #fff3cd; padding: 10px; border-radius: 4px; margin-top: 10px;",
         p(style = "margin: 0; color: #856404;",
           icon("exclamation-triangle"),
-          " No se ha cargado el Excel de contaminadas. ",
+          " No se ha cargado el Excel de impactadas. ",
           tags$b("Cargue el archivo en la sección izquierda para ver el análisis.")
         )
       )
     } else {
-      n_grillas <- nrow(grillas_contaminadas_f5())
-      n_celdas <- if (!is.null(celdas_contaminadas_f5())) nrow(celdas_contaminadas_f5()) else 0
+      n_grillas <- nrow(grillas_impactadas_f5())
+      n_celdas <- if (!is.null(celdas_impactadas_f5())) nrow(celdas_impactadas_f5()) else 0
       
       tags$div(style = "background-color: #d4edda; padding: 10px; border-radius: 4px; margin-top: 10px;",
         p(style = "margin: 0; color: #155724;",
           icon("check-circle"),
-          sprintf(" Excel cargado: %d grillas y %d celdas contaminadas de Fase 5.", n_grillas, n_celdas)
+          sprintf(" Excel cargado: %d grillas y %d celdas impactadas de Fase 5.", n_grillas, n_celdas)
         )
       )
     }
   })
   
-  # Resumen de grillas contaminadas FUERA de celdas
-  output$resumen_grillas_contaminadas_fuera <- renderUI({
+  # Resumen de grillas impactadas FUERA de celdas
+  output$resumen_grillas_impactadas_fuera <- renderUI({
     resultado <- resultado_grillas_fuera()
     
-    if (is.null(grillas_contaminadas_f5())) {
-      return(tags$p(style = "color: #999; font-style: italic;", "⏳ Cargue el Excel de contaminadas primero"))
+    if (is.null(grillas_impactadas_f5())) {
+      return(tags$p(style = "color: #999; font-style: italic;", "⏳ Cargue el Excel de impactadas primero"))
     }
     
     if (is.null(resultado)) {
@@ -3449,47 +3559,47 @@ server <- function(input, output, session) {
     if (resultado$n_fuera == 0) {
       return(tags$div(style = "padding: 10px; background-color: #d4edda; border-radius: 4px;",
         p(style = "color: #155724; margin: 0; font-weight: bold;", 
-          "✅ Ninguna grilla contaminada está fuera de celdas")
+          "✅ Ninguna grilla impactada está fuera de celdas")
       ))
     }
     
-    # Calcular cuántas contaminadas están fuera
-    grillas_cont_codigos <- unique(grillas_contaminadas_f5()$GRILLA)
+    # Calcular cuántas impactadas están fuera
+    grillas_cont_codigos <- unique(grillas_impactadas_f5()$GRILLA)
     grillas_fuera_codigos <- resultado$grillas_fuera$COD_GRILLA
-    contaminadas_fuera <- grillas_fuera_codigos[grillas_fuera_codigos %in% grillas_cont_codigos]
-    n_contaminadas_fuera <- length(contaminadas_fuera)
-    n_total_contaminadas <- length(grillas_cont_codigos)
-    pct <- if (n_total_contaminadas > 0) (n_contaminadas_fuera / n_total_contaminadas * 100) else 0
+    impactadas_fuera <- grillas_fuera_codigos[grillas_fuera_codigos %in% grillas_cont_codigos]
+    n_impactadas_fuera <- length(impactadas_fuera)
+    n_total_impactadas <- length(grillas_cont_codigos)
+    pct <- if (n_total_impactadas > 0) (n_impactadas_fuera / n_total_impactadas * 100) else 0
     
-    if (n_contaminadas_fuera == 0) {
+    if (n_impactadas_fuera == 0) {
       tags$div(style = "padding: 10px; background-color: #d4edda; border-radius: 4px;",
         p(style = "color: #155724; margin: 0; font-weight: bold;", 
-          sprintf("✅ Las %d grillas contaminadas están todas dentro de celdas", n_total_contaminadas))
+          sprintf("✅ Las %d grillas impactadas están todas dentro de celdas", n_total_impactadas))
       )
     } else {
       tags$div(style = "padding: 10px; background-color: #f8d7da; border-radius: 4px;",
         tags$table(style = "width: 100%;",
           tags$tr(
-            tags$td("Total contaminadas:"),
-            tags$td(style = "text-align: right; font-weight: bold;", n_total_contaminadas)
+            tags$td("Total impactadas:"),
+            tags$td(style = "text-align: right; font-weight: bold;", n_total_impactadas)
           ),
           tags$tr(
-            tags$td(style = "color: #721c24; font-weight: bold;", "🚨 Contaminadas FUERA:"),
+            tags$td(style = "color: #721c24; font-weight: bold;", "🚨 impactadas FUERA:"),
             tags$td(style = "text-align: right; color: #721c24; font-weight: bold; font-size: 16px;",
-                   sprintf("%d (%.1f%%)", n_contaminadas_fuera, pct))
+                   sprintf("%d (%.1f%%)", n_impactadas_fuera, pct))
           )
         )
       )
     }
   })
   
-  # Tabla de grillas contaminadas FUERA
-  output$tabla_grillas_contaminadas_fuera <- renderDT({
+  # Tabla de grillas impactadas FUERA
+  output$tabla_grillas_impactadas_fuera <- renderDT({
     resultado <- resultado_grillas_fuera()
     
-    if (is.null(grillas_contaminadas_f5()) || is.null(resultado)) {
+    if (is.null(grillas_impactadas_f5()) || is.null(resultado)) {
       return(datatable(
-        data.frame(Mensaje = "Cargue el Excel de contaminadas y ejecute la verificación espacial"),
+        data.frame(Mensaje = "Cargue el Excel de impactadas y ejecute la verificación espacial"),
         options = list(dom = 't'),
         rownames = FALSE
       ))
@@ -3497,20 +3607,20 @@ server <- function(input, output, session) {
     
     if (resultado$n_fuera == 0) {
       return(datatable(
-        data.frame(Mensaje = "✅ No hay grillas contaminadas fuera de celdas"),
+        data.frame(Mensaje = "✅ No hay grillas impactadas fuera de celdas"),
         options = list(dom = 't'),
         rownames = FALSE
       ))
     }
     
-    # Filtrar solo las contaminadas
-    grillas_cont_codigos <- unique(grillas_contaminadas_f5()$GRILLA)
+    # Filtrar solo las impactadas
+    grillas_cont_codigos <- unique(grillas_impactadas_f5()$GRILLA)
     grillas_fuera <- resultado$grillas_fuera %>%
       filter(COD_GRILLA %in% grillas_cont_codigos)
     
     if (nrow(grillas_fuera) == 0) {
       return(datatable(
-        data.frame(Mensaje = "✅ No hay grillas contaminadas fuera de celdas"),
+        data.frame(Mensaje = "✅ No hay grillas impactadas fuera de celdas"),
         options = list(dom = 't'),
         rownames = FALSE
       ))
@@ -3541,12 +3651,12 @@ server <- function(input, output, session) {
       )
   })
   
-  # Resumen de grillas contaminadas con código INCORRECTO
-  output$resumen_grillas_contaminadas_codigo <- renderUI({
+  # Resumen de grillas impactadas con código INCORRECTO
+  output$resumen_grillas_impactadas_codigo <- renderUI({
     resultado <- resultado_celdas_mal_asignadas()
     
-    if (is.null(grillas_contaminadas_f5())) {
-      return(tags$p(style = "color: #999; font-style: italic;", "⏳ Cargue el Excel de contaminadas primero"))
+    if (is.null(grillas_impactadas_f5())) {
+      return(tags$p(style = "color: #999; font-style: italic;", "⏳ Cargue el Excel de impactadas primero"))
     }
     
     if (is.null(resultado)) {
@@ -3562,47 +3672,47 @@ server <- function(input, output, session) {
     if (resultado$n_mal_asignadas == 0) {
       return(tags$div(style = "padding: 10px; background-color: #d4edda; border-radius: 4px;",
         p(style = "color: #155724; margin: 0; font-weight: bold;", 
-          "✅ Todas las grillas contaminadas tienen códigos correctos")
+          "✅ Todas las grillas impactadas tienen códigos correctos")
       ))
     }
     
-    # Calcular cuántas contaminadas tienen código incorrecto
-    grillas_cont_codigos <- unique(grillas_contaminadas_f5()$GRILLA)
+    # Calcular cuántas impactadas tienen código incorrecto
+    grillas_cont_codigos <- unique(grillas_impactadas_f5()$GRILLA)
     grillas_mal_codigos <- resultado$mal_asignadas$COD_GRILLA
-    contaminadas_mal <- grillas_mal_codigos[grillas_mal_codigos %in% grillas_cont_codigos]
-    n_contaminadas_mal <- length(contaminadas_mal)
-    n_total_contaminadas <- length(grillas_cont_codigos)
-    pct <- if (n_total_contaminadas > 0) (n_contaminadas_mal / n_total_contaminadas * 100) else 0
+    impactadas_mal <- grillas_mal_codigos[grillas_mal_codigos %in% grillas_cont_codigos]
+    n_impactadas_mal <- length(impactadas_mal)
+    n_total_impactadas <- length(grillas_cont_codigos)
+    pct <- if (n_total_impactadas > 0) (n_impactadas_mal / n_total_impactadas * 100) else 0
     
-    if (n_contaminadas_mal == 0) {
+    if (n_impactadas_mal == 0) {
       tags$div(style = "padding: 10px; background-color: #d4edda; border-radius: 4px;",
         p(style = "color: #155724; margin: 0; font-weight: bold;", 
-          sprintf("✅ Las %d grillas contaminadas tienen códigos correctos", n_total_contaminadas))
+          sprintf("✅ Las %d grillas impactadas tienen códigos correctos", n_total_impactadas))
       )
     } else {
       tags$div(style = "padding: 10px; background-color: #f8d7da; border-radius: 4px;",
         tags$table(style = "width: 100%;",
           tags$tr(
-            tags$td("Total contaminadas:"),
-            tags$td(style = "text-align: right; font-weight: bold;", n_total_contaminadas)
+            tags$td("Total impactadas:"),
+            tags$td(style = "text-align: right; font-weight: bold;", n_total_impactadas)
           ),
           tags$tr(
             tags$td(style = "color: #721c24; font-weight: bold;", "🚨 Con código INCORRECTO:"),
             tags$td(style = "text-align: right; color: #721c24; font-weight: bold; font-size: 16px;",
-                   sprintf("%d (%.1f%%)", n_contaminadas_mal, pct))
+                   sprintf("%d (%.1f%%)", n_impactadas_mal, pct))
           )
         )
       )
     }
   })
   
-  # Tabla de grillas contaminadas con código INCORRECTO
-  output$tabla_grillas_contaminadas_codigo <- renderDT({
+  # Tabla de grillas impactadas con código INCORRECTO
+  output$tabla_grillas_impactadas_codigo <- renderDT({
     resultado <- resultado_celdas_mal_asignadas()
     
-    if (is.null(grillas_contaminadas_f5()) || is.null(resultado)) {
+    if (is.null(grillas_impactadas_f5()) || is.null(resultado)) {
       return(datatable(
-        data.frame(Mensaje = "Cargue el Excel de contaminadas y ejecute la verificación espacial"),
+        data.frame(Mensaje = "Cargue el Excel de impactadas y ejecute la verificación espacial"),
         options = list(dom = 't'),
         rownames = FALSE
       ))
@@ -3618,20 +3728,20 @@ server <- function(input, output, session) {
     
     if (resultado$n_mal_asignadas == 0) {
       return(datatable(
-        data.frame(Mensaje = "✅ Todas las grillas contaminadas tienen códigos correctos"),
+        data.frame(Mensaje = "✅ Todas las grillas impactadas tienen códigos correctos"),
         options = list(dom = 't'),
         rownames = FALSE
       ))
     }
     
-    # Filtrar solo las contaminadas
-    grillas_cont_codigos <- unique(grillas_contaminadas_f5()$GRILLA)
+    # Filtrar solo las impactadas
+    grillas_cont_codigos <- unique(grillas_impactadas_f5()$GRILLA)
     mal_asignadas <- resultado$mal_asignadas %>%
       filter(COD_GRILLA %in% grillas_cont_codigos)
     
     if (nrow(mal_asignadas) == 0) {
       return(datatable(
-        data.frame(Mensaje = "✅ Todas las grillas contaminadas tienen códigos correctos"),
+        data.frame(Mensaje = "✅ Todas las grillas impactadas tienen códigos correctos"),
         options = list(dom = 't'),
         rownames = FALSE
       ))
@@ -5433,7 +5543,7 @@ server <- function(input, output, session) {
         cat("Puntos matcheados:", diag$n_puntos_en_ambos, "\n")
         cat("❌ PUNTOS PERDIDOS:", diag$n_puntos_perdidos, "\n\n")
         cat("⚠️  Estos puntos NO aparecerán en 'Todas las Grillas'\n")
-        cat("⚠️  ni en 'Grillas Contaminadas'\n\n")
+        cat("⚠️  ni en 'Grillas impactadas'\n\n")
         cat("Ver detalles completos en pestaña 'Diagnóstico de Match'\n")
         cat("═══════════════════════════════════════════\n\n")
       }
@@ -5564,14 +5674,14 @@ server <- function(input, output, session) {
   })
   
   # Análisis nivel grilla - outputs
-  output$resumen_grillas_contaminadas <- renderPrint({
+  output$resumen_grillas_impactadas <- renderPrint({
     req(muestra_enriquecida())
     datos <- muestra_enriquecida()
     umbral <- input$umbral_tph
     grillas_contam <- datos %>% filter(TPH > umbral)
     diag <- diagnostico_enriquecimiento()
     
-    # Obtener códigos únicos contaminados
+    # Obtener códigos únicos impactados
     codigos_unicos <- grillas_contam %>% 
       pull(if("GRILLA" %in% names(grillas_contam)) GRILLA else PUNTO) %>% 
       unique() %>% 
@@ -5607,15 +5717,15 @@ server <- function(input, output, session) {
     cat("RESUMEN DE ANÁLISIS\n")
     cat("───────────────────\n")
     cat("Total de puntos en análisis:", nrow(datos), "\n")
-    cat("Puntos contaminados (TPH >", umbral, "mg/kg):", nrow(grillas_contam), "\n")
-    cat("Grillas/Códigos contaminados únicos:", length(codigos_unicos), "\n\n")
-    cat("Códigos contaminados:\n")
+    cat("Puntos impactados (TPH >", umbral, "mg/kg):", nrow(grillas_contam), "\n")
+    cat("Grillas/Códigos impactados únicos:", length(codigos_unicos), "\n\n")
+    cat("Códigos impactados:\n")
     if (length(codigos_unicos) > 0) {
       cat(paste(codigos_unicos, collapse = ", "))
     }
   })
   
-  output$tabla_grillas_contaminadas <- renderDT({
+  output$tabla_grillas_impactadas <- renderDT({
     req(muestra_enriquecida())
     datos <- muestra_enriquecida()
     umbral <- input$umbral_tph
@@ -5673,14 +5783,14 @@ server <- function(input, output, session) {
     
     # Añadir columna criterio_contaminacion a todos
     datos_con_criterio <- datos %>%
-      mutate(criterio_contaminacion = ifelse(TPH > umbral, "Supera umbral TPH", "No contaminada")) %>%
+      mutate(criterio_contaminacion = ifelse(TPH > umbral, "Supera umbral TPH", "No impactada")) %>%
       select(criterio_contaminacion, everything())
     
     datatable(datos_con_criterio, options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE) %>%
       formatStyle(
         "criterio_contaminacion",
         backgroundColor = styleEqual(
-          c("Supera umbral TPH", "No contaminada"),
+          c("Supera umbral TPH", "No impactada"),
           c("#dc3545", "#28a745")
         ),
         color = "white",
@@ -5703,7 +5813,7 @@ server <- function(input, output, session) {
       umbral <- input$umbral_tph
       
       datos_con_criterio <- datos %>%
-        mutate(criterio_contaminacion = ifelse(TPH > umbral, "Supera umbral TPH", "No contaminada")) %>%
+        mutate(criterio_contaminacion = ifelse(TPH > umbral, "Supera umbral TPH", "No impactada")) %>%
         select(criterio_contaminacion, everything())
       
       openxlsx::write.xlsx(datos_con_criterio, file)
